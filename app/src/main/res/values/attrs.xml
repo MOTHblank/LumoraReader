@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <declare-styleable name="UnderlinedTextView">
+        <attr name="underlineWidth" format="dimension" />
+        <attr name="underlineColor" format="color" />
+    </declare-styleable>
+
+    <declare-styleable name="StyleableTextView">
+        <attr name="folio_font" format="string" />
+    </declare-styleable>
+
+    <declare-styleable name="DirectionalViewPager">
+        <attr name="direction" format="enum">
+            <enum name="vertical" value="0"/>
+            <enum name="horizontal" value="1"/>
+        </attr>
+    </declare-styleable>
+
+    <declare-styleable name="LoadingView">
+        <attr name="maxVisibleDuration" format="integer" />
+    </declare-styleable>
+
+    <attr name="windowActionBar" format="boolean"/>
+    <attr name="windowNoTitle" format="boolean"/>
+    <attr name="colorPrimary" format="color"/>
+    <attr name="colorPrimaryDark" format="color"/>
+    <attr name="colorAccent" format="color"/>
+    <attr name="background" format="reference|color"/>
+    <attr name="titleTextStyle" format="reference"/>
+    <attr name="defaultFontColor" format="reference|color" />
+    <attr name="searchItemHeaderBackgroundColor" format="reference|color" />
+    <attr name="dividerColor" format="reference|color" />
+    <attr name="popUpWindowBackground" format="reference|color" />
+    <attr name="highlightDeleteFillColor" format="reference|color" />
+    <attr name="underlineIconFillColorTop" format="reference|color" />
+    <attr name="scrollBarColor" format="reference|color" />
+
+</resources>
