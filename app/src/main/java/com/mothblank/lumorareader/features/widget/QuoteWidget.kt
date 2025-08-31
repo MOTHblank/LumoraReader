@@ -22,7 +22,21 @@ import dagger.hilt.EntryPoint
 import dagger.hilt.InstallIn
 import dagger.hilt.components.SingletonComponent
 
+import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.glance.appwidget.CircularProgressIndicator
+import androidx.glance.appwidget.state.updateAppWidgetState
+import androidx.glance.state.GlanceStateDefinition
+import androidx.glance.state.PreferencesGlanceStateDefinition
+import androidx.glance.state.currentState
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.launch
+
 class QuoteWidget : GlanceAppWidget() {
+
+    override val stateDefinition: GlanceStateDefinition<*> = PreferencesGlanceStateDefinition
+
+    private val coroutineScope = MainScope()
 
     // Ponto de entrada para obter dependências do Hilt
     private fun getGetRandomQuoteUseCase(context: Context): GetRandomQuoteUseCase {
@@ -34,37 +48,87 @@ class QuoteWidget : GlanceAppWidget() {
     }
 
     override suspend fun provideGlance(context: Context, id: GlanceId) {
-        val getRandomQuote = getGetRandomQuoteUseCase(context)
-        val quote = getRandomQuote()
-
         provideContent {
-            // If you have a custom GlanceTheme, use it here. Otherwise, remove or replace.
+            val prefs = currentState<Preferences>()
+            val text = prefs[stringPreferencesKey("quote_text")]
+            val author = prefs[stringPreferencesKey("quote_author")]
+            val isLoading = text == null || author == null
+
+            if (isLoading) {
+                coroutineScope.launch {
+                    val getRandomQuote = getGetRandomQuoteUseCase(context)
+                    val quote = getRandomQuote()
+                    updateAppWidgetState(context, id) { state ->
+                        state[stringPreferencesKey("quote_text")] = quote?.text ?: "Nenhuma citação encontrada."
+                        state[stringPreferencesKey("quote_author")] = quote?.author ?: "Adicione uma citação no app."
+                    }
+                    this@QuoteWidget.update(context, id)
+                }
+            }
+
             WidgetContent(
-                text = quote?.text ?: "Nenhuma citação encontrada.",
-                author = quote?.author ?: "Adicione uma citação no app."
+                text = text ?: "Carregando...",
+                author = author ?: "",
+                isLoading = isLoading
             )
         }
     }
 }
 
+import androidx.glance.Image
+import androidx.glance.ImageProvider
+import androidx.glance.action.actionRunCallback
+import androidx.glance.appwidget.action.actionStartActivity
+import androidx.glance.layout.Alignment
+import androidx.glance.layout.Box
+import androidx.glance.layout.Column
+import androidx.glance.layout.Spacer
+import androidx.glance.layout.fillMaxSize
+import androidx.glance.layout.height
+import androidx.glance.layout.padding
+import androidx.glance.layout.clickable
+import androidx.glance.modifier.modifier
+import androidx.glance.unit.ColorProvider
+import com.mothblank.lumorareader.MainActivity
+
 @Composable
-fun WidgetContent(text: String, author: String) {
-    Column(
+fun WidgetContent(text: String, author: String, isLoading: Boolean) {
+    Box(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(R.color.widget_background) // Defina a cor em res/values/colors.xml
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalAlignment = Alignment.CenterHorizontally
+            .background(R.color.widget_background)
+            .clickable(onClick = actionStartActivity<MainActivity>())
     ) {
-        Text(
-            text = "\"$text\"",
-            style = TextStyle(fontSize = 18.sp, color = ColorProvider(R.color.widget_text_color))
-        )
-        Spacer(modifier = GlanceModifier.height(8.dp))
-        Text(
-            text = "- $author",
-            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ColorProvider(R.color.widget_text_color))
-        )
+        Column(
+            modifier = GlanceModifier
+                .fillMaxSize()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Text(
+                text = "\"$text\"",
+                style = TextStyle(fontSize = 18.sp, color = ColorProvider(R.color.widget_text_color))
+            )
+            if (author.isNotEmpty()) {
+                Spacer(modifier = GlanceModifier.height(8.dp))
+                Text(
+                    text = "- $author",
+                    style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ColorProvider(R.color.widget_text_color))
+                )
+            }
+        }
+        if (isLoading) {
+            CircularProgressIndicator(modifier = GlanceModifier.align(Alignment.Center))
+        } else {
+            Image(
+                provider = ImageProvider(R.drawable.ic_refresh),
+                contentDescription = "Refresh",
+                modifier = GlanceModifier
+                    .align(Alignment.TopEnd)
+                    .padding(12.dp)
+                    .clickable(onClick = actionRunCallback<RefreshActionCallback>())
+            )
+        }
     }
 } 
