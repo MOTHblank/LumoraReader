@@ -33,6 +33,7 @@ import com.mothblank.lumorareader.R
 import com.mothblank.lumorareader.presentation.common.ThemeChip
 import com.mothblank.lumorareader.presentation.quotes.QuoteViewModel
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
+import com.mothblank.lumorareader.presentation.preferences.UserPreferencesViewModel
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.launch
 
@@ -53,12 +54,20 @@ class QuoteWidgetConfigActivity : ComponentActivity() {
         }
 
         setContent {
-            MaterialTheme {
-                ConfigScreen(
-                    onConfigComplete = { selectedQuote, selectedTheme, fontSize, fontFamily, transparency ->
-                        saveConfigurationAndFinish(selectedQuote, selectedTheme, fontSize, fontFamily, transparency)
-                    }
-                )
+            val userPreferencesViewModel: UserPreferencesViewModel = hiltViewModel()
+            val activeTheme by userPreferencesViewModel.theme.collectAsState()
+
+            LumoraTheme(theme = activeTheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = MaterialTheme.colorScheme.background
+                ) {
+                    ConfigScreen(
+                        onConfigComplete = { selectedQuote, selectedTheme, fontSize, fontFamily, transparency ->
+                            saveConfigurationAndFinish(selectedQuote, selectedTheme, fontSize, fontFamily, transparency)
+                        }
+                    )
+                }
             }
         }
     }
@@ -112,12 +121,18 @@ class QuoteWidgetConfigActivity : ComponentActivity() {
 @Composable
 fun ConfigScreen(
     viewModel: QuoteViewModel = hiltViewModel(),
+    userPreferencesViewModel: UserPreferencesViewModel = hiltViewModel(),
     onConfigComplete: (selectedQuote: Quote?, selectedTheme: LumoraTheme, fontSize: Int, fontFamily: String, transparency: Float) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val quotes = uiState.quotes
+    val activeThemeState by userPreferencesViewModel.theme.collectAsState()
     var selectedIndex by remember { mutableStateOf(-1) }
     var selectedTheme by remember { mutableStateOf(LumoraTheme.DEFAULT) }
+    
+    LaunchedEffect(activeThemeState) {
+        selectedTheme = activeThemeState
+    }
     
     // Custom styling configurations
     var fontSize by remember { mutableStateOf(18) }

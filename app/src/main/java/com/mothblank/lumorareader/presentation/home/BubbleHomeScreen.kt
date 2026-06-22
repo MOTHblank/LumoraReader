@@ -250,6 +250,14 @@ fun BubbleHomeScreen(navController: NavController) {
                         else -> bubble.title
                     }
 
+                    val onColor = when (bubble.route) {
+                        "books" -> colorScheme.onPrimary
+                        "quotes" -> colorScheme.onSecondary
+                        "theme" -> colorScheme.onTertiary
+                        "language" -> colorScheme.onPrimaryContainer
+                        else -> colorScheme.onPrimary
+                    }
+
                     Box(
                         modifier = Modifier
                             .offset(
@@ -264,6 +272,7 @@ fun BubbleHomeScreen(navController: NavController) {
                             color = bubble.color,
                             isSelected = selectedBubble == index,
                             animationTime = time,
+                            onColor = onColor,
                             onClick = {
                                 selectedBubble = index
                                 navController.navigate(bubble.route)

@@ -183,4 +183,7 @@
     <string name="page_progress">Page progress</string>
     <string name="widget_database_error">Database currently unavailable.</string>
     <string name="widget_database_error_sub">Tap refresh to try again</string>
+    <string name="quote_text_placeholder">Enter the inspiring passage here…</string>
+    <string name="author_placeholder">Enter the author\'s name…</string>
+    <string name="search_quotes_placeholder">Type text or author to search…</string>
 </resources>

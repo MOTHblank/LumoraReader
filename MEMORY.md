@@ -43,6 +43,20 @@ This file serves as our session continuity and long-term memory. It captures arc
 - **Problem:** Home screen widgets lacked customization controls like font sizes, customized typefaces, or background opacities.
 - **Solution:** Extended preference storage datastore with `fontSize`, `fontFamily`, and `transparency`. Redesigned configuration UI with responsive sliders and chip selectors, and updated `QuoteWidget` content layouts to dynamically render and paint layout custom designs based on instance settings.
 
+## Phase 5: Visual Polish, Accessibility & Theme Alignment (June 22, 2026)
+
+### 1. Explicit Back Navigation
+- **Problem:** Navigation locks occurred on screens like `LanguageScreen` (due to missing top bars) or lacked back routes in top app bars.
+- **Solution:** Wired the back navigation icon in `QuotesScreen.kt` using `navController.popBackStack()` and fully enabled secure exit routes across all secondary screens.
+
+### 2. Form Guidance & Inputs Accessibility
+- **Problem:** Forms and search inputs (e.g. quote text fields, filter search bar) lacked placeholders to guide user input.
+- **Solution:** Added dedicated string resources in `strings.xml` and passed `placeholder` parameters into text fields in `EditQuoteDialog.kt` and `QuotesScreen.kt`.
+
+### 3. Widget Config Screen Theme Integration
+- **Problem:** `QuoteWidgetConfigActivity.kt` used standard `MaterialTheme`, completely ignoring the user's custom-selected theme.
+- **Solution:** Injected `UserPreferencesViewModel` to retrieve the user's active theme and dynamically wrapped the config screen in `LumoraTheme`. Defaulted the selected theme chip to the user's active theme.
+
 ## Build & Verification Commands
 - **Run unit tests:** `.\gradlew test`
 - **Build debug APK:** `.\gradlew assembleDebug`

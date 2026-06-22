@@ -33,6 +33,8 @@ fun InteractiveBubble(
     modifier: Modifier = Modifier,
     isSelected: Boolean = false,
     animationTime: Float = 0f,
+    onColor: Color = MaterialTheme.colorScheme.onPrimary,
+    contentDescription: String? = null,
     onClick: () -> Unit
 ) {
     val density = LocalDensity.current
@@ -114,8 +116,8 @@ fun InteractiveBubble(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = text.ifBlank { null },
-                        tint = MaterialTheme.colorScheme.onPrimary,
+                        contentDescription = contentDescription ?: text.ifBlank { null },
+                        tint = onColor,
                         modifier = Modifier.size(iconSize)
                     )
 
@@ -123,7 +125,7 @@ fun InteractiveBubble(
                         Spacer(Modifier.height(6.dp))
                         Text(
                             text = text,
-                            color = MaterialTheme.colorScheme.onPrimary,
+                            color = onColor,
                             fontSize = 13.sp,
                             fontWeight = FontWeight.Medium,
                             maxLines = 1,

@@ -29,13 +29,15 @@ fun EditQuoteDialog(
                 OutlinedTextField(
                     value = editingText,
                     onValueChange = { editingText = it },
-                    label = { Text(stringResource(id = R.string.quote_text)) }
+                    label = { Text(stringResource(id = R.string.quote_text)) },
+                    placeholder = { Text(stringResource(id = R.string.quote_text_placeholder)) }
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedTextField(
                     value = editingAuthor,
                     onValueChange = { editingAuthor = it },
-                    label = { Text(stringResource(id = R.string.author)) }
+                    label = { Text(stringResource(id = R.string.author)) },
+                    placeholder = { Text(stringResource(id = R.string.author_placeholder)) }
                 )
             }
         },

@@ -89,7 +89,7 @@ class MainActivity : AppCompatActivity() {
                         composable("home") { BubbleHomeScreen(navController) }
                         composable("quotes") { QuotesScreen(navController) }
                         composable("theme") { ThemeScreen(navController) }
-                        composable("language") { LanguageScreen() }
+                        composable("language") { LanguageScreen(navController) }
                         composable("books") { BooksScreen(navController) }
                         composable(
                             route = "reader/{bookUri}",

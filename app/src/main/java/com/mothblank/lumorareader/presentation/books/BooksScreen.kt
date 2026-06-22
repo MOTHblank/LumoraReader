@@ -36,6 +36,7 @@ import com.mothblank.lumorareader.domain.model.RecentBook
 import com.mothblank.lumorareader.domain.model.Timestamp
 import java.text.SimpleDateFormat
 import java.util.*
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -66,7 +67,7 @@ fun BooksScreen(
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
     ) {
-        LibraryTopAppBar()
+        LibraryTopAppBar(onBackClick = { navController.popBackStack() })
         LazyColumn(
             contentPadding = PaddingValues(horizontal = 24.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(24.dp)
@@ -137,21 +138,24 @@ fun BooksScreen(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun LibraryTopAppBar() {
-    TopAppBar(
+private fun LibraryTopAppBar(onBackClick: () -> Unit) {
+    CenterAlignedTopAppBar(
         title = {
-            Box(
-                modifier = Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = stringResource(id = R.string.library),
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
+            Text(
+                text = stringResource(id = R.string.library),
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold
+            )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(R.string.back)
                 )
             }
         },
-        colors = TopAppBarDefaults.topAppBarColors(
+        colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
             containerColor = Color.Transparent
         )
     )

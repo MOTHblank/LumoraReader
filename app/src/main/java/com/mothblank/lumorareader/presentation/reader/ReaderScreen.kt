@@ -1328,6 +1328,7 @@ fun ReaderSettingsMenu(
                     InteractiveBubble(
                         size = 64.dp,
                         text = "",               // empty = icon-only
+                        contentDescription = stringResource(id = theme.aName),
                         icon = Icons.Default.Palette,
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,

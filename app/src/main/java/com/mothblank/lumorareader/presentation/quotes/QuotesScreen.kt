@@ -109,7 +109,8 @@ fun QuotesScreen(
                     start = MaterialTheme.colorScheme.background.copy(alpha = 0f),
                     stop = MaterialTheme.colorScheme.surface,
                     fraction = scrollFraction.value
-                )
+                ),
+                onBackClick = { navController.popBackStack() }
             )
         },
         floatingActionButton = {
@@ -157,6 +158,7 @@ fun QuotesScreen(
                     value = filterOptions.searchQuery,
                     onValueChange = { viewModel.onSearchQueryChange(it) },
                     label = { Text(stringResource(id = R.string.search_quotes)) },
+                    placeholder = { Text(stringResource(id = R.string.search_quotes_placeholder)) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )

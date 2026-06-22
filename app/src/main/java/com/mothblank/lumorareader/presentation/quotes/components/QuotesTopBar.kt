@@ -1,6 +1,7 @@
 package com.mothblank.lumorareader.presentation.quotes.components
 
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
@@ -29,6 +30,7 @@ fun QuotesTopBar(
     onShowMoreOptions: () -> Unit,
     // New parameter for the scroll-aware background
     containerColor: Color,
+    onBackClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
     TopAppBar(
@@ -37,6 +39,14 @@ fun QuotesTopBar(
                 text = stringResource(id = R.string.quotes),
                 style = MaterialTheme.typography.titleLarge
             )
+        },
+        navigationIcon = {
+            IconButton(onClick = onBackClick) {
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(id = R.string.back)
+                )
+            }
         },
         actions = {
             // Filter/Search icon
