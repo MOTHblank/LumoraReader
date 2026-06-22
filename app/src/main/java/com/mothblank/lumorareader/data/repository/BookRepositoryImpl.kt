@@ -11,7 +11,12 @@ import com.mothblank.lumorareader.domain.usecase.BookReader
 import com.mothblank.lumorareader.domain.BookType
 import com.mothblank.lumorareader.domain.repository.BookRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
+import org.xmlpull.v1.XmlPullParser
+import org.xmlpull.v1.XmlPullParserFactory
 import timber.log.Timber
+import java.util.zip.ZipInputStream
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,15 +25,14 @@ class BookRepositoryImpl @Inject constructor(
     @ApplicationContext private val context: Context
 ) : BookRepository {
 
-    override suspend fun openBook(book: Book): BookReader {
-        // This part is correct and doesn't need to change.
-        return when (book.type) {
+    override suspend fun openBook(book: Book): BookReader = withContext(Dispatchers.IO) {
+        when (book.type) {
             BookType.PDF -> PdfBookReader(context, book.uri)
             BookType.EPUB -> EpubBookReader(context, book.uri)
         }
     }
 
-    override suspend fun getBookDetails(uri: String): Book {
+    override suspend fun getBookDetails(uri: String): Book = withContext(Dispatchers.IO) {
         // 1. Get the real file name from the Content URI.
         val fileName = getFileName(Uri.parse(uri)) ?: context.getString(R.string.unknown)
         Timber.d("Resolved file name from URI: $fileName")
@@ -46,21 +50,132 @@ class BookRepositoryImpl @Inject constructor(
 
         if (bookType == BookType.EPUB) {
             try {
-                EpubBookReader(context, uri).use { reader ->
-                    title = reader.title.ifEmpty { title }
-                    author = reader.author
-                }
+                val metadata = parseEpubMetadataFromUri(Uri.parse(uri))
+                metadata.first?.let { title = it }
+                author = metadata.second
             } catch (e: Exception) {
-                Timber.e(e, "Failed to parse EPUB metadata dynamically for $uri")
+                Timber.e(e, "Failed to parse EPUB metadata dynamically from zip stream for $uri")
             }
         }
 
-        return Book(
+        Book(
             uri = uri,
             title = title,
             author = author,
             type = bookType
         )
+    }
+
+    /**
+     * Helper to read EPUB metadata directly from the zip stream without extracting any files to disk.
+     */
+    private fun parseEpubMetadataFromUri(uri: Uri): Pair<String?, String?> {
+        var opfPath: String? = null
+        var title: String? = null
+        var author: String? = null
+
+        // Pass 1: Find container.xml in ZIP to get OPF path
+        try {
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                ZipInputStream(inputStream).use { zipInputStream ->
+                    var entry = zipInputStream.nextEntry
+                    while (entry != null) {
+                        if (entry.name == "META-INF/container.xml") {
+                            opfPath = parseContainerFromStream(zipInputStream)
+                            break
+                        }
+                        zipInputStream.closeEntry()
+                        entry = zipInputStream.nextEntry
+                    }
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Error finding container.xml in ZIP stream")
+        }
+
+        // Pass 2: Find the OPF file in ZIP to parse Title and Creator
+        if (opfPath != null) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    ZipInputStream(inputStream).use { zipInputStream ->
+                        var entry = zipInputStream.nextEntry
+                        while (entry != null) {
+                            if (entry.name == opfPath) {
+                                val meta = parseMetadataFromOpfStream(zipInputStream)
+                                title = meta.first
+                                author = meta.second
+                                break
+                            }
+                            zipInputStream.closeEntry()
+                            entry = zipInputStream.nextEntry
+                        }
+                    }
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Error parsing OPF metadata from ZIP stream")
+            }
+        }
+
+        return Pair(title, author)
+    }
+
+    private fun parseContainerFromStream(inputStream: java.io.InputStream): String? {
+        try {
+            val parser = XmlPullParserFactory.newInstance().newPullParser()
+            parser.setInput(NonClosingInputStream(inputStream), null)
+            while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                if (parser.eventType == XmlPullParser.START_TAG && parser.name == "rootfile") {
+                    val fullPath = parser.getAttributeValue(null, "full-path")
+                    val mediaType = parser.getAttributeValue(null, "media-type")
+                    if (fullPath != null && (mediaType == "application/oebps-package+xml" || fullPath.endsWith(".opf", true))) {
+                        return fullPath
+                    }
+                }
+                parser.next()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse container XML from stream")
+        }
+        return null
+    }
+
+    private fun parseMetadataFromOpfStream(inputStream: java.io.InputStream): Pair<String?, String?> {
+        var title: String? = null
+        var author: String? = null
+        try {
+            val parser = XmlPullParserFactory.newInstance().newPullParser()
+            parser.setInput(NonClosingInputStream(inputStream), null)
+            while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                if (parser.eventType == XmlPullParser.START_TAG) {
+                    val localName = parser.name.substringAfter(':').lowercase()
+                    when (localName) {
+                        "title" -> {
+                            val text = parser.nextText()?.trim()
+                            if (!text.isNullOrEmpty()) {
+                                title = text
+                            }
+                        }
+                        "creator" -> {
+                            val text = parser.nextText()?.trim()
+                            if (!text.isNullOrEmpty()) {
+                                author = text
+                            }
+                        }
+                    }
+                }
+                parser.next()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse OPF XML from stream")
+        }
+        return Pair(title, author)
+    }
+
+    private class NonClosingInputStream(private val delegate: java.io.InputStream) : java.io.InputStream() {
+        override fun read(): Int = delegate.read()
+        override fun read(b: ByteArray): Int = delegate.read(b)
+        override fun read(b: ByteArray, off: Int, len: Int): Int = delegate.read(b, off, len)
+        override fun close() { /* Do nothing to prevent closing ZipInputStream */ }
     }
 
     /**

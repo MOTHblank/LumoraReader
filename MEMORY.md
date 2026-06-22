@@ -33,6 +33,18 @@ This file serves as our session continuity and long-term memory. It captures arc
 - **Problem:** Failures or delays in database access (e.g. SQLiteException) during widget refresh operations would crash the widget state update loop.
 - **Solution:** Wrapped all database operations in [RefreshQuoteAction.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/features/widget/RefreshQuoteAction.kt) in a `try-catch` block. On failure, it gracefully catches the exception, registers error messaging state in the widget, and renders localized alternate fallback messages defined in [strings.xml](file:///C:/LumoraReader/app/src/main/res/values/strings.xml).
 
+### 3. Sliding-Window PDF Render Cache Pruning (June 22, 2026)
+- **Problem:** Rendered PDF pages (bitmaps up to 16MB each) were cached in `pageCache` but never evicted during scrolling, leading to high RAM consumption and eventual `OutOfMemoryError` crashes during long reading sessions.
+- **Solution:** Added `prunePdfPageCache(currentPageIndex)` in [ReaderViewModel.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/presentation/reader/ReaderViewModel.kt) to keep only a sliding window of $\pm$ 5 pages in memory and evict the rest during scrolling.
+
+### 4. Zero-Disk EPUB Stream Metadata Parsing (June 22, 2026)
+- **Problem:** `BookRepositoryImpl.getBookDetails` ran on the main thread and created a heavy, temporary `EpubBookReader` instance just to read title and author metadata, which fully unzipped the entire EPUB and wrote hundreds of files to disk twice back-to-back.
+- **Solution:** Optimized [BookRepositoryImpl.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/data/repository/BookRepositoryImpl.kt) to use `Dispatchers.IO` and added a stream-based zip parser using `ZipInputStream` and XML-Pull. Metadata is now parsed directly from the content stream in milliseconds with zero disk writes.
+
+### 5. Lazy EPUB Chapter Chunking (June 22, 2026)
+- **Problem:** `EpubBookReader` eagerly read every single chapter, executed multiple heavy path-resolving regex replacements, and loaded all text into memory in the constructor just to calculate chunk groups.
+- **Solution:** Updated `createChunks` in [EpubBookReader.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/data/EpubBookReader.kt) to compute chunk boundaries using unzipped chapter file sizes on disk (`chapterFile.length()`) instead of reading their contents, achieving instant document opening times.
+
 ## Phase 4: Metadata Parsing & Advanced Widget Styling
 
 ### 1. Real EPUB Metadata & Table of Contents Parsing

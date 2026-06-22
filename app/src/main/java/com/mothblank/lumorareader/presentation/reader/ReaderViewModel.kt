@@ -188,6 +188,10 @@ class ReaderViewModel @Inject constructor(
             _uiState.update { it.copy(currentPdfPage = index) }
             // Reset zoom when page changes
             resetPdfPageZoom()
+            
+            // Prune the PDF page cache to prevent OutOfMemoryError
+            prunePdfPageCache(index)
+
             // Preload adjacent pages
             // Previous page
             if (index > 0) {
@@ -197,6 +201,17 @@ class ReaderViewModel @Inject constructor(
             loadPdfPage(index + 1)
             loadPdfPage(index + 2)
             loadPdfPage(index + 3)
+        }
+    }
+
+    private fun prunePdfPageCache(currentPageIndex: Int) {
+        val keepRange = (currentPageIndex - 5)..(currentPageIndex + 5)
+        val keysToRemove = pageCache.keys.filter { it !in keepRange }
+        keysToRemove.forEach { key ->
+            pageCache.remove(key)
+        }
+        if (keysToRemove.isNotEmpty()) {
+            Timber.d("Pruned ${keysToRemove.size} pages from PDF render cache. Remaining cache size: ${pageCache.size}")
         }
     }
 

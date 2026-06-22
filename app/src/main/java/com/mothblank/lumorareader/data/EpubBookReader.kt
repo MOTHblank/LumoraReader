@@ -97,9 +97,11 @@ class EpubBookReader(
         chunkedSpine.clear()
         var currentChunk = mutableListOf<Int>()
         var currentSize = 0
-        spine.forEachIndexed { index, _ ->
-            val chapterContent = getChapterContent(index)
-            val chapterSize = chapterContent.length
+        spine.forEachIndexed { index, chapterPath ->
+            // Use the on-disk file size of the extracted chapter as a proxy for character size.
+            // This prevents reading every chapter and executing path-resolving regexes at startup.
+            val chapterFile = File(tempDir, chapterPath)
+            val chapterSize = if (chapterFile.exists()) chapterFile.length().toInt() else 0
             if (currentSize + chapterSize > maxChunkSize && currentChunk.isNotEmpty()) {
                 chunkedSpine.add(currentChunk.toList())
                 currentChunk = mutableListOf()
@@ -267,6 +269,14 @@ class EpubBookReader(
                 var entry = zipInputStream.nextEntry
                 while (entry != null) {
                     val file = File(tempDir, entry.name)
+                    
+                    // Security Check: Prevent Zip Slip path traversal vulnerability
+                    val canonicalPath = file.canonicalPath
+                    val tempDirCanonicalPath = tempDir.canonicalPath
+                    if (!canonicalPath.startsWith(tempDirCanonicalPath + File.separator) && canonicalPath != tempDirCanonicalPath) {
+                        throw SecurityException("Malicious ZIP entry with path traversal: ${entry.name}")
+                    }
+
                     if (entry.isDirectory) {
                         file.mkdirs()
                     } else {
