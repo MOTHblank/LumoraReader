@@ -67,8 +67,27 @@ class PdfBookReader(
         // Use the 'use' block to automatically close the PdfRenderer.Page object
         // after it's been used. This is crucial for memory management.
         renderer.openPage(pageIndex).use { page ->
-            // Create a bitmap with the exact dimensions of the PDF page.
-            val bitmap = Bitmap.createBitmap(page.width, page.height, Bitmap.Config.ARGB_8888)
+            // Implement safe PDF bitmap allocation limits: scale down if either dimension exceeds MAX_BITMAP_DIMENSION
+            var targetWidth = page.width
+            var targetHeight = page.height
+
+            if (targetWidth > MAX_BITMAP_DIMENSION || targetHeight > MAX_BITMAP_DIMENSION) {
+                val aspectRatio = targetWidth.toFloat() / targetHeight.toFloat()
+                if (targetWidth > targetHeight) {
+                    targetWidth = MAX_BITMAP_DIMENSION
+                    targetHeight = (MAX_BITMAP_DIMENSION / aspectRatio).toInt()
+                } else {
+                    targetHeight = MAX_BITMAP_DIMENSION
+                    targetWidth = (MAX_BITMAP_DIMENSION * aspectRatio).toInt()
+                }
+            }
+
+            // Ensure dimensions are at least 1 pixel
+            targetWidth = targetWidth.coerceAtLeast(1)
+            targetHeight = targetHeight.coerceAtLeast(1)
+
+            // Create a bitmap with the safe dimensions.
+            val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
 
             // Render the page content onto the bitmap.
             // The other null parameters mean we render the full page with no clipping.
@@ -77,6 +96,10 @@ class PdfBookReader(
             // Return the result wrapped in our sealed interface.
             Page.PdfPage(bitmap)
         }
+    }
+
+    companion object {
+        private const val MAX_BITMAP_DIMENSION = 2048
     }
 
     /**

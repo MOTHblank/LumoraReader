@@ -36,12 +36,26 @@ class RefreshQuoteAction : ActionCallback {
 
         val quoteToDisplay: Quote?
 
-        if (quoteId != -1) {
-            Timber.d("Refetching specific quote with ID: $quoteId")
-            quoteToDisplay = quoteRepository.getQuoteById(quoteId) // This will be fixed in the next step
-        } else {
-            Timber.d("Fetching a new random quote")
-            quoteToDisplay = getRandomQuote()
+        try {
+            if (quoteId != -1) {
+                Timber.d("Refetching specific quote with ID: $quoteId")
+                quoteToDisplay = quoteRepository.getQuoteById(quoteId)
+            } else {
+                Timber.d("Fetching a new random quote")
+                quoteToDisplay = getRandomQuote()
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Database access failed during widget refresh.")
+            // Gracefully display alternative error layouts on the widget if database fails
+            updateAppWidgetState(context, QuoteWidgetStateDefinition, glanceId) { prefs ->
+                prefs.toMutablePreferences().apply {
+                    this[QuoteWidgetStateDefinition.Keys.quoteIdKey] = -1
+                    this[QuoteWidgetStateDefinition.Keys.quoteTextKey] = context.getString(R.string.widget_database_error)
+                    this[QuoteWidgetStateDefinition.Keys.quoteAuthorKey] = context.getString(R.string.widget_database_error_sub)
+                }
+            }
+            QuoteWidget().update(context, glanceId)
+            return
         }
 
         updateAppWidgetState(context, QuoteWidgetStateDefinition, glanceId) { prefs ->

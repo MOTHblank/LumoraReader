@@ -181,4 +181,6 @@
     <string name="next_page">"Next page "</string>
     <string name="previous_page">Previous page</string>
     <string name="page_progress">Page progress</string>
+    <string name="widget_database_error">Database currently unavailable.</string>
+    <string name="widget_database_error_sub">Tap refresh to try again</string>
 </resources>
