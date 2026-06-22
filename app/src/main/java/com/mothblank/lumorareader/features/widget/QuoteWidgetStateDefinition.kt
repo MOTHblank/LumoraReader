@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -32,7 +33,9 @@ object QuoteWidgetStateDefinition : GlanceStateDefinition<Preferences> {
         val quoteIdKey = intPreferencesKey("widget_quote_id")
         val quoteTextKey = stringPreferencesKey("widget_quote_text")
         val quoteAuthorKey = stringPreferencesKey("widget_quote_author")
-        // ADD THIS:
         val themeNameKey = stringPreferencesKey("widget_theme_name")
+        val fontSizeKey = intPreferencesKey("widget_font_size")
+        val fontFamilyKey = stringPreferencesKey("widget_font_family")
+        val transparencyKey = floatPreferencesKey("widget_transparency")
     }
 }

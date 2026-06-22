@@ -40,11 +40,25 @@ class BookRepositoryImpl @Inject constructor(
             else -> throw IllegalArgumentException(context.getString(R.string.unsupported_file_type, uri, fileName))
         }
 
-        // 3. Create the book object.
+        // 3. Create the book object with real metadata if it is an EPUB.
+        var title = fileName.substringBeforeLast(".")
+        var author: String? = null
+
+        if (bookType == BookType.EPUB) {
+            try {
+                EpubBookReader(context, uri).use { reader ->
+                    title = reader.title.ifEmpty { title }
+                    author = reader.author
+                }
+            } catch (e: Exception) {
+                Timber.e(e, "Failed to parse EPUB metadata dynamically for $uri")
+            }
+        }
+
         return Book(
             uri = uri,
-            title = fileName,
-            author = null, // Parsing author is a more complex task for later
+            title = title,
+            author = author,
             type = bookType
         )
     }

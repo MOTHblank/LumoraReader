@@ -7,12 +7,16 @@ import android.content.Intent
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -51,20 +55,25 @@ class QuoteWidgetConfigActivity : ComponentActivity() {
         setContent {
             MaterialTheme {
                 ConfigScreen(
-                    onConfigComplete = { selectedQuote, selectedTheme ->
-                        saveConfigurationAndFinish(selectedQuote, selectedTheme)
+                    onConfigComplete = { selectedQuote, selectedTheme, fontSize, fontFamily, transparency ->
+                        saveConfigurationAndFinish(selectedQuote, selectedTheme, fontSize, fontFamily, transparency)
                     }
                 )
             }
         }
     }
 
-    private fun saveConfigurationAndFinish(selectedQuote: Quote?, selectedTheme: LumoraTheme) {
+    private fun saveConfigurationAndFinish(
+        selectedQuote: Quote?,
+        selectedTheme: LumoraTheme,
+        fontSize: Int,
+        fontFamily: String,
+        transparency: Float
+    ) {
         val context: Context = this
 
         lifecycleScope.launch {
             try {
-                // THIS IS THE FIX: Use GlanceAppWidgetManager to handle the ID conversion and update.
                 val glanceManager = GlanceAppWidgetManager(context)
                 val glanceId = glanceManager.getGlanceIdBy(appWidgetId)
 
@@ -75,6 +84,9 @@ class QuoteWidgetConfigActivity : ComponentActivity() {
                         this[QuoteWidgetStateDefinition.Keys.quoteTextKey] = selectedQuote?.text ?: "Random Quote"
                         this[QuoteWidgetStateDefinition.Keys.quoteAuthorKey] = selectedQuote?.author ?: "LumoraReader"
                         this[QuoteWidgetStateDefinition.Keys.themeNameKey] = selectedTheme.name
+                        this[QuoteWidgetStateDefinition.Keys.fontSizeKey] = fontSize
+                        this[QuoteWidgetStateDefinition.Keys.fontFamilyKey] = fontFamily
+                        this[QuoteWidgetStateDefinition.Keys.transparencyKey] = transparency
                     }
                 }
 
@@ -100,44 +112,74 @@ class QuoteWidgetConfigActivity : ComponentActivity() {
 @Composable
 fun ConfigScreen(
     viewModel: QuoteViewModel = hiltViewModel(),
-    onConfigComplete: (selectedQuote: Quote?, selectedTheme: LumoraTheme) -> Unit
+    onConfigComplete: (selectedQuote: Quote?, selectedTheme: LumoraTheme, fontSize: Int, fontFamily: String, transparency: Float) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val quotes = uiState.quotes
     var selectedIndex by remember { mutableStateOf(-1) }
     var selectedTheme by remember { mutableStateOf(LumoraTheme.DEFAULT) }
+    
+    // Custom styling configurations
+    var fontSize by remember { mutableStateOf(18) }
+    var fontFamily by remember { mutableStateOf("SansSerif") }
+    var transparency by remember { mutableStateOf(0.0f) }
 
-    Column(Modifier.fillMaxSize()) {
-        Text(stringResource(id = R.string.select_a_quote), style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(16.dp))
-        LazyColumn(modifier = Modifier.weight(1f)) {
-            item {
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedIndex = -1 }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(selected = selectedIndex == -1, onClick = { selectedIndex = -1 })
-                    Text(stringResource(id = R.string.random_quote), modifier = Modifier.padding(start = 8.dp))
+    val scrollState = rememberScrollState()
+
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(scrollState)
+    ) {
+        Text(
+            text = stringResource(id = R.string.select_a_quote),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(16.dp)
+        )
+
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(180.dp)
+                .padding(horizontal = 16.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            LazyColumn(modifier = Modifier.fillMaxSize()) {
+                item {
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedIndex = -1 }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedIndex == -1, onClick = { selectedIndex = -1 })
+                        Text(stringResource(id = R.string.random_quote), modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
-            }
-            itemsIndexed(quotes) { index, quote ->
-                Row(
-                    Modifier
-                        .fillMaxWidth()
-                        .clickable { selectedIndex = index }
-                        .padding(horizontal = 16.dp, vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    RadioButton(selected = selectedIndex == index, onClick = { selectedIndex = index })
-                    Text("\"${quote.text.take(40)}...\" - ${quote.author}", modifier = Modifier.padding(start = 8.dp))
+                itemsIndexed(quotes) { index, quote ->
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .clickable { selectedIndex = index }
+                            .padding(horizontal = 16.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        RadioButton(selected = selectedIndex == index, onClick = { selectedIndex = index })
+                        Text("\"${quote.text.take(40)}...\" - ${quote.author}", modifier = Modifier.padding(start = 8.dp))
+                    }
                 }
             }
         }
 
+        Spacer(modifier = Modifier.height(16.dp))
         Divider(modifier = Modifier.padding(horizontal = 16.dp))
-        Text(stringResource(id = R.string.select_a_theme), style = MaterialTheme. typography.headlineSmall, modifier = Modifier.padding(16.dp))
+        
+        Text(
+            text = stringResource(id = R.string.select_a_theme),
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(16.dp)
+        )
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -152,10 +194,79 @@ fun ConfigScreen(
             }
         }
 
+        Divider(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
+        
+        Text(
+            text = "Widget Styling",
+            style = MaterialTheme.typography.headlineSmall,
+            modifier = Modifier.padding(16.dp)
+        )
+
+        // Font Size
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Font Size", style = MaterialTheme.typography.bodyLarge)
+            Text("${fontSize} sp", style = MaterialTheme.typography.bodyMedium)
+        }
+        Slider(
+            value = fontSize.toFloat(),
+            onValueChange = { fontSize = it.toInt() },
+            valueRange = 12f..24f,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Font Family
+        Text(
+            text = "Font Family",
+            style = MaterialTheme.typography.bodyLarge,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+        )
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf("SansSerif", "Serif", "Monospace").forEach { family ->
+                CustomStyleChip(
+                    text = family,
+                    isSelected = fontFamily == family,
+                    onClick = { fontFamily = family }
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(16.dp))
+
+        // Background Transparency
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text("Background Transparency", style = MaterialTheme.typography.bodyLarge)
+            Text("${(transparency * 100).toInt()}%", style = MaterialTheme.typography.bodyMedium)
+        }
+        Slider(
+            value = transparency,
+            onValueChange = { transparency = it },
+            valueRange = 0f..1f,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+
+        Spacer(modifier = Modifier.height(16.dp))
+
         Button(
             onClick = {
                 val selectedQuote = if (selectedIndex == -1) null else quotes.getOrNull(selectedIndex)
-                onConfigComplete(selectedQuote, selectedTheme)
+                onConfigComplete(selectedQuote, selectedTheme, fontSize, fontFamily, transparency)
             },
             modifier = Modifier
                 .fillMaxWidth()
@@ -163,5 +274,26 @@ fun ConfigScreen(
         ) {
             Text(stringResource(id = R.string.confirm))
         }
+    }
+}
+
+@Composable
+fun CustomStyleChip(
+    text: String,
+    isSelected: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        modifier = Modifier.clickable(onClick = onClick),
+        shape = RoundedCornerShape(16.dp),
+        color = if (isSelected) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant,
+        contentColor = if (isSelected) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+        border = if (isSelected) BorderStroke(1.dp, MaterialTheme.colorScheme.primary) else null
+    ) {
+        Text(
+            text = text,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            style = MaterialTheme.typography.labelLarge
+        )
     }
 }

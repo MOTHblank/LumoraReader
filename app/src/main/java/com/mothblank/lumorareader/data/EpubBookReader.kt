@@ -37,13 +37,34 @@ class EpubBookReader(
     private val mediaFiles = mutableMapOf<String, String>() // original path -> temp file path
     private val cssFiles = mutableListOf<String>()
 
+    // Metadata & ToC
+    var title: String = ""
+        private set
+    var author: String? = null
+        private set
+    private var navHref: String? = null
+    private var ncxHref: String? = null
+    private val tableOfContents = mutableListOf<Pair<String, Int>>()
+
     init {
         tempDir = File(context.cacheDir, "epub_${bookUri.hashCode()}").apply { mkdirs() }
         unzipEpub()
+
+        val filename = Uri.parse(bookUri).lastPathSegment ?: "Unknown Book"
+        title = filename.substringBeforeLast(".")
+
         val opfPath = parseContainer()
         contentBaseUrl = "file://${tempDir.absolutePath}/"
         spine = parseOpf(opfPath)
         createChunks()
+
+        // Parse Table of Contents
+        val toc = mutableListOf<Pair<String, Int>>()
+        navHref?.let { toc.addAll(parseNav(it)) }
+        if (toc.isEmpty()) {
+            ncxHref?.let { toc.addAll(parseNcx(it)) }
+        }
+        tableOfContents.addAll(toc)
     }
 
     // --- Public Interface Methods ---
@@ -59,7 +80,7 @@ class EpubBookReader(
         Page.EpubPage(htmlContent, contentBaseUrl)
     }
 
-    override fun getTableOfContents(): List<Pair<String, Int>> = emptyList()
+    override fun getTableOfContents(): List<Pair<String, Int>> = tableOfContents
 
     override fun close() {
         tempDir.deleteRecursively()
@@ -309,6 +330,7 @@ class EpubBookReader(
         val spineRefs = mutableListOf<SpineItem>()
         val allHtmlItems = mutableListOf<String>()
         val opfDir = File(opfPath).parent ?: ""
+        var tocId: String? = null
 
         try {
             FileInputStream(opfFile).use { fis ->
@@ -316,11 +338,25 @@ class EpubBookReader(
                 parser.setInput(fis, null)
                 while (parser.eventType != XmlPullParser.END_DOCUMENT) {
                     if (parser.eventType == XmlPullParser.START_TAG) {
-                        when (parser.name) {
+                        val localName = parser.name.substringAfter(':').lowercase()
+                        when (localName) {
+                            "title" -> {
+                                val text = parser.nextText()?.trim()
+                                if (!text.isNullOrEmpty()) {
+                                    title = text
+                                }
+                            }
+                            "creator" -> {
+                                val text = parser.nextText()?.trim()
+                                if (!text.isNullOrEmpty()) {
+                                    author = text
+                                }
+                            }
                             "item" -> {
                                 val id = parser.getAttributeValue(null, "id")
                                 val href = parser.getAttributeValue(null, "href")
                                 val mediaType = parser.getAttributeValue(null, "media-type")
+                                val properties = parser.getAttributeValue(null, "properties")
                                 if (id != null && href != null && mediaType != null) {
                                     val resolvedHref = resolveRelativePath(opfDir, href)
                                     val item = ManifestItem(id, resolvedHref, mediaType)
@@ -328,7 +364,16 @@ class EpubBookReader(
                                     if (isContentDocument(mediaType, href)) {
                                         allHtmlItems.add(resolvedHref)
                                     }
+                                    if (properties != null && properties.split(Regex("\\s+")).contains("nav")) {
+                                        navHref = resolvedHref
+                                    }
+                                    if (mediaType == "application/x-dtbncx+xml") {
+                                        ncxHref = resolvedHref
+                                    }
                                 }
+                            }
+                            "spine" -> {
+                                tocId = parser.getAttributeValue(null, "toc")
                             }
                             "itemref" -> {
                                 val idref = parser.getAttributeValue(null, "idref")
@@ -343,6 +388,12 @@ class EpubBookReader(
             }
         } catch (e: Exception) {
             throw IOException(context.getString(R.string.failed_to_parse_opf_file, e.message), e)
+        }
+
+        // Post-resolve the NCX file if referenced by toc ID in the spine element
+        val manifestItemForToc = manifest[tocId ?: ""]
+        if (manifestItemForToc != null) {
+            ncxHref = manifestItemForToc.href
         }
 
         val readingOrder = buildReadingOrder(manifest, spineRefs, allHtmlItems)
@@ -375,7 +426,11 @@ class EpubBookReader(
         mediaType.lowercase() in setOf("application/xhtml+xml", "text/html") || href.substringAfterLast('.', "").lowercase() in setOf("html", "xhtml", "htm")
 
     private fun fileExists(relativePath: String): Boolean = File(tempDir, relativePath).exists()
-    private fun resolveRelativePath(basePath: String, relativePath: String): String = if (basePath.isEmpty()) relativePath else File(basePath, relativePath).path.replace("//", "/")
+    
+    private fun resolveRelativePath(basePath: String, relativePath: String): String {
+        val path = if (basePath.isEmpty()) relativePath else File(basePath, relativePath).path
+        return path.replace('\\', '/').replace("//", "/")
+    }
 
     private fun scanForContentFiles(opfDir: String): List<String> {
         val contentDir = if (opfDir.isEmpty()) tempDir else File(tempDir, opfDir)
@@ -384,6 +439,97 @@ class EpubBookReader(
             .sortedBy { it.name }
             .map { it.relativeTo(tempDir).path.replace('\\', '/') }
             .toList()
+    }
+
+    private fun findSpineIndex(href: String): Int {
+        val normalizedHref = href.replace('\\', '/').trim().lowercase()
+        spine.forEachIndexed { index, spinePath ->
+            val normalizedSpine = spinePath.replace('\\', '/').trim().lowercase()
+            if (normalizedSpine == normalizedHref || normalizedSpine.endsWith("/$normalizedHref") || normalizedHref.endsWith("/$normalizedSpine")) {
+                return index
+            }
+        }
+        return -1
+    }
+
+    private fun parseNcx(ncxPath: String): List<Pair<String, Int>> {
+        val ncxFile = File(tempDir, ncxPath)
+        if (!ncxFile.exists()) return emptyList()
+
+        val toc = mutableListOf<Pair<String, Int>>()
+        val ncxDir = File(ncxPath).parent ?: ""
+
+        try {
+            FileInputStream(ncxFile).use { fis ->
+                val parser = XmlPullParserFactory.newInstance().newPullParser()
+                parser.setInput(fis, null)
+                var lastText: String? = null
+
+                while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                    if (parser.eventType == XmlPullParser.START_TAG) {
+                        val localName = parser.name.substringAfter(':').lowercase()
+                        when (localName) {
+                            "text" -> {
+                                lastText = parser.nextText()?.trim()
+                            }
+                            "content" -> {
+                                val src = parser.getAttributeValue(null, "src")
+                                if (lastText != null && src != null) {
+                                    val resolvedSrc = resolveRelativePath(ncxDir, src)
+                                    val cleanSrc = resolvedSrc.substringBefore('#').replace('\\', '/').replace("//", "/")
+                                    val spineIndex = findSpineIndex(cleanSrc)
+                                    if (spineIndex != -1) {
+                                        toc.add(Pair(lastText, spineIndex))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    parser.next()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse NCX file: $ncxPath")
+        }
+        return toc
+    }
+
+    private fun parseNav(navPath: String): List<Pair<String, Int>> {
+        val navFile = File(tempDir, navPath)
+        if (!navFile.exists()) return emptyList()
+
+        val toc = mutableListOf<Pair<String, Int>>()
+        val navDir = File(navPath).parent ?: ""
+
+        try {
+            FileInputStream(navFile).use { fis ->
+                val parser = XmlPullParserFactory.newInstance().newPullParser()
+                parser.setFeature(XmlPullParser.FEATURE_PROCESS_NAMESPACES, false)
+                parser.setInput(fis, null)
+
+                while (parser.eventType != XmlPullParser.END_DOCUMENT) {
+                    if (parser.eventType == XmlPullParser.START_TAG) {
+                        val localName = parser.name.substringAfter(':').lowercase()
+                        if (localName == "a") {
+                            val href = parser.getAttributeValue(null, "href")
+                            val label = parser.nextText()?.trim()
+                            if (href != null && !label.isNullOrEmpty()) {
+                                val resolvedHref = resolveRelativePath(navDir, href)
+                                val cleanHref = resolvedHref.substringBefore('#').replace('\\', '/').replace("//", "/")
+                                val spineIndex = findSpineIndex(cleanHref)
+                                if (spineIndex != -1) {
+                                    toc.add(Pair(label, spineIndex))
+                                }
+                            }
+                        }
+                    }
+                    parser.next()
+                }
+            }
+        } catch (e: Exception) {
+            Timber.e(e, "Failed to parse Nav file: $navPath")
+        }
+        return toc
     }
 
     private data class ManifestItem(val id: String, val href: String, val mediaType: String)

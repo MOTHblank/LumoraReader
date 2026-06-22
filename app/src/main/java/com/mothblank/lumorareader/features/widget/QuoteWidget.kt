@@ -4,6 +4,7 @@ import android.content.ComponentName
 import android.content.Context
 import androidx.annotation.ColorRes
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -24,6 +25,7 @@ import androidx.glance.layout.*
 import androidx.glance.text.FontWeight
 import androidx.glance.text.Text
 import androidx.glance.text.TextStyle
+import androidx.glance.text.FontFamily
 import androidx.glance.unit.ColorProvider
 import com.mothblank.lumorareader.MainActivity
 import com.mothblank.lumorareader.R
@@ -39,6 +41,11 @@ class QuoteWidget : GlanceAppWidget() {
             val text = prefs[QuoteWidgetStateDefinition.Keys.quoteTextKey] ?: stringResource(id = R.string.configure_your_widget)
             val author = prefs[QuoteWidgetStateDefinition.Keys.quoteAuthorKey] ?: stringResource(id = R.string.lumora_reader_author)
 
+            // Read custom styling preferences
+            val fontSize = prefs[QuoteWidgetStateDefinition.Keys.fontSizeKey] ?: 18
+            val fontFamilyStr = prefs[QuoteWidgetStateDefinition.Keys.fontFamilyKey] ?: "SansSerif"
+            val transparency = prefs[QuoteWidgetStateDefinition.Keys.transparencyKey] ?: 0.0f
+
             // Read the saved theme name from the widget's state, falling back to DEFAULT.
             val themeName = prefs[QuoteWidgetStateDefinition.Keys.themeNameKey] ?: LumoraTheme.DEFAULT.name
             val theme = try {
@@ -50,11 +57,25 @@ class QuoteWidget : GlanceAppWidget() {
             // Get the corresponding color resource IDs for the selected theme.
             val (bgColorRes, textColorRes) = getWidgetThemeColors(theme)
 
+            // Resolve color resources to Color and apply transparency alpha blending
+            val contextLocal = LocalContext.current
+            val baseColor = Color(contextLocal.getColor(bgColorRes))
+            val finalBgColor = baseColor.copy(alpha = 1.0f - transparency)
+            val finalTextColor = Color(contextLocal.getColor(textColorRes))
+
+            val glanceFontFamily = when (fontFamilyStr) {
+                "Serif" -> FontFamily.Serif
+                "Monospace" -> FontFamily.Monospace
+                else -> FontFamily.SansSerif
+            }
+
             WidgetContent(
                 text = text,
                 author = author,
-                backgroundColorRes = bgColorRes,
-                textColorRes = textColorRes
+                backgroundColor = finalBgColor,
+                textColor = finalTextColor,
+                fontSize = fontSize,
+                fontFamily = glanceFontFamily
             )
         }
     }
@@ -84,8 +105,10 @@ private fun getWidgetThemeColors(theme: LumoraTheme): Pair<Int, Int> {
 fun WidgetContent(
     text: String,
     author: String,
-    @ColorRes backgroundColorRes: Int,
-    @ColorRes textColorRes: Int
+    backgroundColor: Color,
+    textColor: Color,
+    fontSize: Int,
+    fontFamily: FontFamily
 ) {
     val launchAppAction = actionStartActivity(ComponentName(LocalContext.current, MainActivity::class.java))
     val refreshAction = actionRunCallback<RefreshQuoteAction>()
@@ -93,7 +116,7 @@ fun WidgetContent(
     Column(
         modifier = GlanceModifier
             .fillMaxSize()
-            .background(ColorProvider(backgroundColorRes)) // Use the resource ID
+            .background(ColorProvider(backgroundColor))
             .clickable(launchAppAction)
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -101,12 +124,21 @@ fun WidgetContent(
     ) {
         Text(
             text = "\"$text\"",
-            style = TextStyle(fontSize = 18.sp, color = ColorProvider(textColorRes)),
+            style = TextStyle(
+                fontSize = fontSize.sp, 
+                color = ColorProvider(textColor),
+                fontFamily = fontFamily
+            ),
             modifier = GlanceModifier.padding(bottom = 8.dp)
         )
         Text(
             text = "- $author",
-            style = TextStyle(fontSize = 14.sp, fontWeight = FontWeight.Bold, color = ColorProvider(textColorRes)),
+            style = TextStyle(
+                fontSize = (fontSize - 4).coerceAtLeast(10).sp, 
+                fontWeight = FontWeight.Bold, 
+                color = ColorProvider(textColor),
+                fontFamily = fontFamily
+            ),
             modifier = GlanceModifier.padding(bottom = 16.dp)
         )
         Image(
