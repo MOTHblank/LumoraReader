@@ -33,6 +33,16 @@ This file serves as our session continuity and long-term memory. It captures arc
 - **Problem:** Failures or delays in database access (e.g. SQLiteException) during widget refresh operations would crash the widget state update loop.
 - **Solution:** Wrapped all database operations in [RefreshQuoteAction.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/features/widget/RefreshQuoteAction.kt) in a `try-catch` block. On failure, it gracefully catches the exception, registers error messaging state in the widget, and renders localized alternate fallback messages defined in [strings.xml](file:///C:/LumoraReader/app/src/main/res/values/strings.xml).
 
+## Phase 4: Metadata Parsing & Advanced Widget Styling
+
+### 1. Real EPUB Metadata & Table of Contents Parsing
+- **Problem:** Book repository returned placeholder values for EPUB metadata (title, author, table of contents) because `EpubBookReader` lacked XML parsing.
+- **Solution:** Modified `BookReader` to implement `Closeable` and refactored `EpubBookReader` to use namespace-independent XML-pull metadata parsing. Added custom NCX (EPUB 2) and Nav XHTML (EPUB 3) parser routines that map reference paths to reading order spine indices.
+
+### 2. Premium Widget Personalization
+- **Problem:** Home screen widgets lacked customization controls like font sizes, customized typefaces, or background opacities.
+- **Solution:** Extended preference storage datastore with `fontSize`, `fontFamily`, and `transparency`. Redesigned configuration UI with responsive sliders and chip selectors, and updated `QuoteWidget` content layouts to dynamically render and paint layout custom designs based on instance settings.
+
 ## Build & Verification Commands
 - **Run unit tests:** `.\gradlew test`
 - **Build debug APK:** `.\gradlew assembleDebug`
