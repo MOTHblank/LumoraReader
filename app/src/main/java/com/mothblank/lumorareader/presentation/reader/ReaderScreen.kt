@@ -790,8 +790,22 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                 factory = { context ->
                     WebView(context).apply {
                         settings.javaScriptEnabled = true
+                        
+                        // Security Hardening: Disable content:// access as all assets are loaded locally via file://
+                        settings.allowContentAccess = false
+                        
+                        // Security Hardening: Explicitly block cross-file access from file context to prevent local file leaks
                         settings.allowFileAccess = true
-                        settings.allowContentAccess = true
+                        @Suppress("DEPRECATION")
+                        settings.allowFileAccessFromFileURLs = false
+                        @Suppress("DEPRECATION")
+                        settings.allowUniversalAccessFromFileURLs = false
+                        
+                        // Security Hardening: Enable Safe Browsing protection against malicious links (API 26+)
+                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                            settings.safeBrowsingEnabled = true
+                        }
+
                         settings.domStorageEnabled = true
                         isVerticalScrollBarEnabled = true
                         settings.builtInZoomControls = true
