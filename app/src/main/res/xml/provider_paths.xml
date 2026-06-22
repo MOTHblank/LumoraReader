@@ -1,10 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <!-- This tells the FileProvider that it is allowed to share files
-         from our app's cache directory. -->
+    <!-- Security hardening: Limit the FileProvider to share ONLY the epub_cache
+         subdirectory of our cache directory (Principle of Least Privilege). -->
     <cache-path
         name="cached_books"
-        path="." />
+        path="epub_cache" />
 </paths>
 
     

@@ -47,7 +47,11 @@ class EpubBookReader(
     private val tableOfContents = mutableListOf<Pair<String, Int>>()
 
     init {
-        tempDir = File(context.cacheDir, "epub_${bookUri.hashCode()}").apply { mkdirs() }
+        // Security hardening: Put temp HTML/EPUB unzipped files in a dedicated subdirectory
+        // of cacheDir so we only share that specific subdirectory in FileProvider,
+        // enforcing the principle of least privilege.
+        val cacheSubdir = File(context.cacheDir, "epub_cache")
+        tempDir = File(cacheSubdir, "epub_${bookUri.hashCode()}").apply { mkdirs() }
         unzipEpub()
 
         val filename = Uri.parse(bookUri).lastPathSegment ?: "Unknown Book"

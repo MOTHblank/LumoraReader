@@ -69,6 +69,21 @@ This file serves as our session continuity and long-term memory. It captures arc
 - **Problem:** `QuoteWidgetConfigActivity.kt` used standard `MaterialTheme`, completely ignoring the user's custom-selected theme.
 - **Solution:** Injected `UserPreferencesViewModel` to retrieve the user's active theme and dynamically wrapped the config screen in `LumoraTheme`. Defaulted the selected theme chip to the user's active theme.
 
+## Phase 6: Security Hardening & Input Sanitation (June 22, 2026)
+
+### 1. Quote Input Length Restrictions
+- **Problem:** Unrestricted quote inputs could allow excessive data to be stored, resulting in local performance denial of service (DoS), UI layout breaking, or database bloat.
+- **Solution:** Enforced a robust 2000-character limit on quote text and a 100-character limit on the author field in [EditQuoteDialog.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/presentation/quotes/components/EditQuoteDialog.kt), paired with Material Design 3 supporting text counters.
+
+### 2. Isolated FileProvider Sandbox Boundary
+- **Problem:** The app's `FileProvider` in `provider_paths.xml` shared `path="."` of the cache directory, granting access to the entire app cache directory (violating the Principle of Least Privilege).
+- **Solution:** Refactored [EpubBookReader.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/data/EpubBookReader.kt) to extract and render temporary HTML chunks within an isolated `epub_cache` subdirectory inside the cache folder. Tightened [provider_paths.xml](file:///C:/LumoraReader/app/src/main/res/xml/provider_paths.xml) to share only `path="epub_cache"`.
+
+### 3. Log Information Leak Prevention
+- **Problem:** Logging failure to parse EPUB metadata dynamically from zip stream printed the full local file URI, potentially leaking sensitive user paths (such as directories containing the user's name) in warning/error log reports.
+- **Solution:** Updated [BookRepositoryImpl.kt](file:///C:/LumoraReader/app/src/main/java/com/mothblank/lumorareader/data/repository/BookRepositoryImpl.kt) to use `fileName` instead of the full URI path during error reporting.
+
 ## Build & Verification Commands
 - **Run unit tests:** `.\gradlew test`
 - **Build debug APK:** `.\gradlew assembleDebug`
+

@@ -54,7 +54,8 @@ class BookRepositoryImpl @Inject constructor(
                 metadata.first?.let { title = it }
                 author = metadata.second
             } catch (e: Exception) {
-                Timber.e(e, "Failed to parse EPUB metadata dynamically from zip stream for $uri")
+                // Security check: Use filename instead of the full URI path to prevent leaking user storage structure/names in logs
+                Timber.e(e, "Failed to parse EPUB metadata dynamically from zip stream for $fileName")
             }
         }
 
