@@ -1,10 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:tools="http://schemas.android.com/tools"
-    package="com.mothblank.lumorareader">
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- REMOVED: Unnecessary permissions for the app's core functionality -->
+    <!-- <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" /> -->
+    <!-- <uses-permission android:name="android.permission.READ_MEDIA_VISUAL_USER_SELECTED" /> -->
+    <!-- <uses-permission android:name="android.permission.READ_MEDIA_AUDIO" /> -->
+    <!-- <uses-permission android:name="android.permission.INTERNET" /> -->
+
 
     <application
-        android:name="com.mothblank.lumorareader.MainApplication"
+        android:name=".MainApplication"
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
         android:fullBackupContent="@xml/backup_rules"
@@ -12,30 +18,65 @@
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:theme="@style/Theme.LumoraReader"
+        android:theme="@style/AppTheme"
         tools:targetApi="31">
 
         <activity
-            android:name="com.mothblank.lumorareader.MainActivity"
+            android:name=".MainActivity"
             android:exported="true"
-            android:theme="@style/Theme.LumoraReader">
+            android:windowSoftInputMode="adjustResize"
+            android:theme="@style/Theme.LumoraReader.NoActionBar">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- CORRECTED: A single, robust intent-filter for opening files -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="content" />
+                <data android:scheme="file" />
+                <data android:mimeType="application/pdf" />
+                <data android:mimeType="application/epub+zip" />
+            </intent-filter>
         </activity>
 
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.provider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/provider_paths" />
+        </provider>
+
+        <!-- ADDED: The receiver for the Glance App Widget -->
         <receiver
-            android:name="com.mothblank.lumorareader.features.widget.QuoteWidgetReceiver"
+            android:name=".features.widget.QuoteWidgetReceiver"
             android:exported="false">
             <intent-filter>
                 <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
             </intent-filter>
             <meta-data
                 android:name="android.appwidget.provider"
-                android:resource="@xml/quote_widget_info" />
+                android:resource="@xml/quote_widget_provider_info" />
         </receiver>
 
-    </application>
+        <!-- ADDED: The configuration activity for the widget -->
+        <activity
+            android:name=".features.widget.QuoteWidgetConfigActivity"
+            android:exported="true"
+            android:theme="@style/Theme.LumoraReader">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_CONFIGURE"/>
+            </intent-filter>
+        </activity>
 
+        <!-- REMOVED: The unnecessary localeConfig. Language is handled programmatically. -->
+        <!-- android:localeConfig="@xml/locales_config" -->
+
+    </application>
 </manifest>

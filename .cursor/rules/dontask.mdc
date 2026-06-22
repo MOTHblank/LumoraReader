@@ -1,0 +1,4 @@
+---
+alwaysApply: true
+Definition: Do not ask for confirmation before proceeding with steps of a task; assume approval unless explicitly told otherwise.
+---

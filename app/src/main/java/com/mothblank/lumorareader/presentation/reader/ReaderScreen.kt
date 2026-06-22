@@ -1,0 +1,1652 @@
+package com.mothblank.lumorareader.presentation.reader
+
+import android.annotation.SuppressLint
+import android.app.Activity
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
+import android.graphics.Bitmap
+import android.webkit.JavascriptInterface
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.ScrollableDefaults
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FormatQuote
+import androidx.compose.material.icons.filled.FormatSize
+import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Palette
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.ScreenRotation
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.StayCurrentLandscape
+import androidx.compose.material.icons.filled.StayCurrentPortrait
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.rememberModalBottomSheetState
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.mothblank.lumorareader.R
+import com.mothblank.lumorareader.domain.model.Page
+import com.mothblank.lumorareader.presentation.home.components.InteractiveBubble
+import com.mothblank.lumorareader.ui.theme.LumoraTheme
+import com.mothblank.lumorareader.ui.theme.representativeColor
+import kotlinx.coroutines.delay
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    var animationTime by remember { mutableFloatStateOf(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            animationTime += 1f
+            delay(16) // 60fps
+        }
+    }
+    LaunchedEffect(Unit) {
+        val activity = context as? Activity
+        activity?.let { act ->
+            viewModel.setOriginalOrientation(act.requestedOrientation)
+        }
+    }
+    LaunchedEffect(uiState.orientation) {
+        val activity = context as? Activity
+        activity?.requestedOrientation = uiState.orientation
+    }
+    DisposableEffect(Unit) {
+        onDispose {
+            val activity = context as? Activity
+            activity?.let { act ->
+                // Restore the original orientation when leaving the reader
+                act.requestedOrientation = viewModel.restoreOriginalOrientation()
+            }
+        }
+    }
+    LumoraTheme(theme = uiState.theme) {
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            topBar = {
+            }
+        ) { paddingValues ->
+            Box(modifier = Modifier.padding(paddingValues).fillMaxSize()) {
+                when {
+                    uiState.isLoading -> LoadingView()
+                    uiState.error != null -> ErrorView(
+                        error = uiState.error,
+                        onRetry = { viewModel.retryLoading() })
+
+                    uiState.isEpub -> EpubScrollReader(viewModel)
+                    uiState.isPdf -> PdfScrollReader(viewModel)
+                }
+
+                // Show save status message (centered, above other elements)
+                uiState.quoteSaveStatus?.let { status ->
+                    Card(
+                        modifier = Modifier
+                            .align(Alignment.TopCenter)
+                            .padding(top = 80.dp, start = 16.dp, end = 16.dp),
+                        colors = CardDefaults.cardColors(
+                            containerColor = if (status.contains("success"))
+                                MaterialTheme.colorScheme.primaryContainer
+                            else
+                                MaterialTheme.colorScheme.errorContainer
+                        )
+                    ) {
+                        Text(
+                            text = status,
+                            modifier = Modifier.padding(16.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = if (status.contains("success"))
+                                MaterialTheme.colorScheme.onPrimaryContainer
+                            else
+                                MaterialTheme.colorScheme.onErrorContainer
+                        )
+                    }
+                }
+
+                // Enhanced selected text preview and quote options with interactive bubbles
+                AnimatedVisibility(
+                    visible = uiState.selectedText.isNotBlank(),
+                    enter = slideInVertically(initialOffsetY = { it }),
+                    exit = slideOutVertically(targetOffsetY = { it })
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Selected text preview with enhanced styling
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f)
+                            ),
+                            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp)
+                            ) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        Icons.Default.FormatQuote,
+                                        contentDescription = null,
+                                        tint = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "Selected Text",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = uiState.selectedText,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface,
+                                    maxLines = 4
+                                )
+                            }
+                        }
+
+                        // Interactive bubble options
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceEvenly,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            // Clear selection bubble
+                            InteractiveBubble(
+                                size = 72.dp,
+                                text = "",                        // icon-only mode
+                                icon = Icons.Default.Close,
+                                color = MaterialTheme.colorScheme.error,
+                                isSelected = false,
+                                animationTime = animationTime,
+                                onClick = { viewModel.clearTextSelection() }
+                            )
+
+                            // Save quote bubble with selection animation
+                            InteractiveBubble(
+                                size = 72.dp,
+                                text = "",                        // icon-only mode
+                                icon = Icons.Default.FormatQuote,
+                                color = MaterialTheme.colorScheme.primary,
+                                isSelected = true,               // keeps the glow
+                                animationTime = animationTime,
+                                onClick = { viewModel.saveSelectedQuote() }
+                            )
+                        }
+                    }
+                }
+            }
+        }
+
+        if (uiState.isMenuVisible) {
+            val sheetState = rememberModalBottomSheetState(
+                skipPartiallyExpanded = false // Allow partial expansion for better landscape handling
+            )
+            val configuration = LocalConfiguration.current
+            val isLandscape = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+
+            ModalBottomSheet(
+                onDismissRequest = { viewModel.onToggleMenuVisibility() },
+                sheetState = sheetState,
+                containerColor = MaterialTheme.colorScheme.surface,
+                contentColor = MaterialTheme.colorScheme.onSurface,
+                dragHandle = {
+                    Surface(
+                        modifier = Modifier
+                            .padding(vertical = 8.dp)
+                            .size(width = 32.dp, height = 4.dp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.4f),
+                        shape = RoundedCornerShape(2.dp)
+                    ) {}
+                }
+            ) {
+                // Make the entire content scrollable with proper height constraints
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .then(
+                            if (isLandscape) {
+                                // In landscape, set a specific height range
+                                Modifier
+                                    .heightIn(
+                                        min = (configuration.screenHeightDp * 0.5f).dp,
+                                        max = (configuration.screenHeightDp * 0.8f).dp
+                                    )
+                            } else {
+                                // In portrait, allow natural sizing with minimum
+                                Modifier.heightIn(min = 200.dp)
+                            }
+                        )
+                        .padding(horizontal = 16.dp)
+                        .padding(bottom = 32.dp),
+                    verticalArrangement = Arrangement.spacedBy(20.dp),
+                    contentPadding = PaddingValues(vertical = 16.dp)
+                ) {
+                    // Add navigation bar based on book type
+                    if (uiState.isEpub && uiState.hasMultipleChunks) {
+                        item {
+                            ChunkNavigationBar(
+                                currentChunk = uiState.currentChunkIndex,
+                                totalChunks = uiState.epubChunkCount,
+                                onPreviousChunk = { viewModel.previousEpubChunk() },
+                                onNextChunk = { viewModel.nextEpubChunk() }
+                            )
+                        }
+
+                        item {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    } else if (uiState.isPdf && uiState.pdfPageCount > 1) {
+                        item {
+                            PdfPageNavigationBar(
+                                currentPage = uiState.currentPdfPage + 1,
+                                totalPages = uiState.pdfPageCount,
+                                onPreviousPage = {
+                                    if (uiState.currentPdfPage > 0) {
+                                        viewModel.onPdfPageChanged(uiState.currentPdfPage - 1)
+                                    }
+                                },
+                                onNextPage = {
+                                    if (uiState.currentPdfPage < uiState.pdfPageCount - 1) {
+                                        viewModel.onPdfPageChanged(uiState.currentPdfPage + 1)
+                                    }
+                                },
+                                onPageSelected = { page ->
+                                    if (page in 1..uiState.pdfPageCount) {
+                                        viewModel.onPdfPageChanged(page - 1)
+                                    }
+                                }
+                            )
+                        }
+
+                        item {
+                            HorizontalDivider(
+                                modifier = Modifier.padding(vertical = 8.dp)
+                            )
+                        }
+                    }
+
+                    item {
+                        ScrollableReaderSettingsMenu(
+                            uiState = uiState,
+                            onThemeChange = { viewModel.onThemeChange(it) },
+                            onFontSizeChange = { viewModel.onFontSizeChange(it) },
+                            onOrientationChange = { viewModel.onOrientationChange(it) },
+                            animationTime = animationTime,
+                            isLandscape = isLandscape
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+fun ScrollableReaderSettingsMenu(
+    uiState: ReaderUiState,
+    onThemeChange: (LumoraTheme) -> Unit,
+    onFontSizeChange: (Float) -> Unit,
+    onOrientationChange: (Int) -> Unit,
+    animationTime: Float = 0f,
+    isLandscape: Boolean = false
+) {
+    Column(
+        modifier = Modifier.fillMaxWidth(),
+        verticalArrangement = Arrangement.spacedBy(20.dp)
+    ) {
+        // Enhanced header with icon
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Icon(
+                Icons.Default.Settings,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.primary
+            )
+            Text(
+                "Reader Settings",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+
+        HorizontalDivider()
+
+        // Orientation section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.ScreenRotation,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    "Screen Orientation",
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // Orientation options - use a row for landscape, keep vertical for portrait
+            if (isLandscape) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceEvenly
+                ) {
+                    OrientationButtons(uiState, onOrientationChange, animationTime)
+                }
+            } else {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    OrientationButtons(uiState, onOrientationChange, animationTime)
+                }
+            }
+        }
+
+        HorizontalDivider()
+
+        // Theme section
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Palette,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    stringResource(id = R.string.theme_title),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // Enhanced theme selection with interactive bubbles
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                contentPadding = PaddingValues(horizontal = 4.dp),
+                modifier = Modifier.height(80.dp) // Fixed height to prevent layout issues
+            ) {
+                items(LumoraTheme.entries) { theme ->
+                    InteractiveBubble(
+                        size = 56.dp,
+                        text = "",               // empty = icon-only
+                        icon = Icons.Default.Palette,
+                        color = theme.representativeColor,
+                        isSelected = uiState.theme == theme,
+                        animationTime = animationTime,
+                        onClick = { onThemeChange(theme) }
+                    )
+                }
+            }
+        }
+
+        HorizontalDivider()
+
+        // Font size section with enhanced UI
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.FormatSize,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(20.dp)
+                )
+                Text(
+                    stringResource(id = R.string.font_size),
+                    style = MaterialTheme.typography.titleMedium
+                )
+            }
+
+            // Font size preview - make it more compact in landscape
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Text(
+                    text = "Sample text at ${String.format("%.0f", uiState.fontSizeScale * 100)}%",
+                    modifier = Modifier.padding(if (isLandscape) 12.dp else 16.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * uiState.fontSizeScale
+                    ),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            // Enhanced slider with labels
+            Column {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "80%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        "200%",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                Slider(
+                    value = uiState.fontSizeScale,
+                    onValueChange = onFontSizeChange,
+                    valueRange = 0.8f..2.0f,
+                    steps = 11,
+                    colors = SliderDefaults.colors(
+                        thumbColor = MaterialTheme.colorScheme.primary,
+                        activeTrackColor = MaterialTheme.colorScheme.primary,
+                        inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                    )
+                )
+            }
+        }
+
+        HorizontalDivider()
+
+        // Additional settings with interactive bubbles - more compact in landscape
+        Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            Text(
+                "Quick Actions",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                InteractiveBubble(
+                    size = if (isLandscape) 48.dp else 56.dp,
+                    text = "",
+                    icon = Icons.Default.Refresh,
+                    color = MaterialTheme.colorScheme.secondary,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO refresh */ }
+                )
+
+                InteractiveBubble(
+                    size = if (isLandscape) 48.dp else 56.dp,
+                    text = "",
+                    icon = Icons.Default.Share,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO share */ }
+                )
+
+                InteractiveBubble(
+                    size = if (isLandscape) 48.dp else 56.dp,
+                    text = "",
+                    icon = Icons.Default.Info,
+                    color = MaterialTheme.colorScheme.outline,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO info */ }
+                )
+            }
+        }
+    }
+}
+@Composable
+fun OrientationButtons(
+    uiState: ReaderUiState,
+    onOrientationChange: (Int) -> Unit,
+    animationTime: Float
+) {
+    // Portrait option
+    InteractiveBubble(
+        size = 56.dp,
+        text = "",
+        icon = Icons.Default.StayCurrentPortrait,
+        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.outline,
+        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+        animationTime = animationTime,
+        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) }
+    )
+
+    // Landscape option
+    InteractiveBubble(
+        size = 56.dp,
+        text = "",
+        icon = Icons.Default.StayCurrentLandscape,
+        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.outline,
+        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+        animationTime = animationTime,
+        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }
+    )
+
+    // Auto option
+    InteractiveBubble(
+        size = 56.dp,
+        text = "",
+        icon = Icons.Default.ScreenRotation,
+        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+            MaterialTheme.colorScheme.primary
+        else
+            MaterialTheme.colorScheme.outline,
+        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+        animationTime = animationTime,
+        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
+    )
+}
+@Composable
+fun PdfPageNavigationBar(
+    currentPage: Int,
+    totalPages: Int,
+    onPreviousPage: () -> Unit,
+    onNextPage: () -> Unit,
+    onPageSelected: (Int) -> Unit
+) {
+    var showPageDialog by remember { mutableStateOf(false) }
+    var pageInput by remember { mutableStateOf("") }
+
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Previous button with enhanced styling
+            FilledTonalIconButton(
+                onClick = onPreviousPage,
+                enabled = currentPage > 1,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (currentPage > 1)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (currentPage > 1)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = stringResource(id = R.string.previous_page)
+                )
+            }
+
+            // Page indicator with enhanced styling
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                ),
+                modifier = Modifier.clickable { showPageDialog = true }
+            ) {
+                Text(
+                    text = "Page $currentPage of $totalPages",
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Next button with enhanced styling
+            FilledTonalIconButton(
+                onClick = onNextPage,
+                enabled = currentPage < totalPages,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (currentPage < totalPages)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (currentPage < totalPages)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = stringResource(id = R.string.next_page)
+                )
+            }
+        }
+    }
+
+    // Page jump dialog
+    if (showPageDialog) {
+        AlertDialog(
+            onDismissRequest = { showPageDialog = false },
+            title = { Text("Go to Page") },
+            text = {
+                OutlinedTextField(
+                    value = pageInput,
+                    onValueChange = {
+                        // Only allow numeric input
+                        if (it.isEmpty() || it.all { char -> char.isDigit() }) {
+                            pageInput = it
+                        }
+                    },
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number
+                    ),
+                    label = { Text("Page number") },
+                    singleLine = true
+                )
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        val page = pageInput.toIntOrNull()
+                        if (page != null && page in 1..totalPages) {
+                            // Call the onPageSelected function to navigate to the page
+                            onPageSelected(page)
+                            showPageDialog = false
+                            pageInput = ""
+                        }
+                    }
+                ) {
+                    Text("Go")
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = {
+                        showPageDialog = false
+                        pageInput = ""
+                    }
+                ) {
+                    Text("Cancel")
+                }
+            }
+        )
+    }
+}
+
+@SuppressLint("SetJavaScriptEnabled", "JavascriptInterface")
+@Composable
+fun EpubScrollReader(viewModel: ReaderViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val fileUri = uiState.epubFileUri
+    var webView by remember { mutableStateOf<WebView?>(null) }
+    var contentLoaded by remember { mutableStateOf(false) }
+
+    val jsBundle = remember { generateJsBundle() }
+
+    if (fileUri != null) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AndroidView(
+                modifier = Modifier.fillMaxSize(),
+                factory = { context ->
+                    WebView(context).apply {
+                        settings.javaScriptEnabled = true
+                        settings.allowFileAccess = true
+                        settings.allowContentAccess = true
+                        settings.domStorageEnabled = true
+                        isVerticalScrollBarEnabled = true
+                        settings.builtInZoomControls = true
+                        settings.displayZoomControls = false
+                        settings.setSupportZoom(true)
+
+                        // Add JS interface with onTap
+                        addJavascriptInterface(object : Any() {
+                            @JavascriptInterface
+                            fun saveScrollPosition(pos: Int) {
+                                if (webView != null) viewModel.saveScrollPosition(pos)
+                            }
+                            @JavascriptInterface
+                            fun onScrollNearBottom() {
+                                viewModel.onScrollNearEndOfSection()
+                            }
+                            @JavascriptInterface
+                            fun onContentLoaded() {
+                                contentLoaded = true
+                            }
+                            @JavascriptInterface
+                            fun onTap() {
+                                viewModel.onToggleMenuVisibility()
+                            }
+                        }, "AndroidInterface")
+
+                        addJavascriptInterface(object : Any() {
+                            @JavascriptInterface
+                            fun onTextSelected(text: String) {
+                                viewModel.onTextSelected(text)
+                            }
+                            @JavascriptInterface
+                            fun onSelectionCleared() {
+                                viewModel.clearTextSelection()
+                            }
+                        }, "AndroidSelectionInterface")
+
+                        webViewClient = object : WebViewClient() {
+                            override fun onPageStarted(v: WebView?, u: String?, fav: Bitmap?) {
+                                super.onPageStarted(v, u, fav)
+                                contentLoaded = false
+                            }
+                            override fun onPageFinished(v: WebView?, u: String?) {
+                                v?.evaluateJavascript(jsBundle, null)
+                            }
+                        }
+
+                        webView = this
+                        loadUrl(fileUri)
+                    }
+                },
+                update = { wv ->
+                    webView = wv
+                    wv.evaluateJavascript("window.isTextSelectionActive = ${uiState.isTextSelectionActive};", null)
+                }
+            )
+        }
+    } else if (uiState.isLoading) {
+        LoadingView()
+    }
+
+    // Cleanup on dispose
+    DisposableEffect(Unit) {
+        onDispose {
+            webView?.let { w ->
+                w.stopLoading()
+                w.loadUrl("about:blank")
+                w.removeAllViews()
+                w.destroy()
+            }
+            webView = null
+        }
+    }
+}
+
+// MARK: - JavaScript Bundle (Memoized)
+private fun generateJsBundle(): String = """
+    (function(){
+        const sel = () => window.getSelection();
+        const fire = (e, p) => window.AndroidInterface?.[e]?.(p);
+        const LONG = 450, MAX_MOVE = 20, TAP_MOVE = 24, TAP_TIME = 280;
+        let sx, sy, st;
+        let longTimer;
+        let scrollTimeout;
+        
+        // ✅ Add tap detection variables
+        let tapStartX, tapStartY;
+        let tapTimeout;
+        
+        const saveScroll = () => {
+            clearTimeout(scrollTimeout);
+            scrollTimeout = setTimeout(() => {
+                const y = window.pageYOffset || document.documentElement.scrollTop;
+                const h = document.documentElement.scrollHeight;
+                const v = window.innerHeight;
+                if (!sel() || sel().isCollapsed) fire('saveScrollPosition', Math.round(y));
+                if (y + v + 50 >= h) fire('onScrollNearBottom');
+            }, 150);
+        };
+        window.addEventListener('scroll', saveScroll, { passive: true });
+        
+        document.addEventListener('touchstart', (e) => {
+            if (e.touches.length === 0) return;
+            const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now();
+            
+            // ✅ Add tap detection initialization
+            tapStartX = t.clientX;
+            tapStartY = t.clientY;
+            clearTimeout(tapTimeout);
+            tapTimeout = setTimeout(() => {
+                tapStartX = tapStartY = null;
+            }, 500);
+            
+            if (!sel()?.isCollapsed) return;
+            longTimer = setTimeout(() => {
+                const dx = Math.abs(e.touches[0].clientX - sx);
+                const dy = Math.abs(e.touches[0].clientY - sy);
+                if (dx > MAX_MOVE || dy > MAX_MOVE) return;
+                const r = document.caretRangeFromPoint(sx, sy);
+                if (!r || r.startContainer.nodeType !== Node.TEXT_NODE) return;
+                const txt = r.startContainer.textContent;
+                let s = r.startOffset, e = r.startOffset;
+                while (s > 0 && /\w/.test(txt[s - 1])) s--;
+                while (e < txt.length && /\w/.test(txt[e])) e++;
+                r.setStart(r.startContainer, s);
+                r.setEnd(r.startContainer, e);
+                sel()?.removeAllRanges();
+                sel()?.addRange(r);
+            }, LONG);
+        }, { passive: true });
+        
+        // ✅ Add tap detection
+        document.addEventListener('touchend', (e) => {
+            clearTimeout(longTimer);
+            
+            // ✅ Add tap detection logic
+            if (!tapStartX || !tapStartY) return;
+            const touch = e.changedTouches[0];
+            const dx = Math.abs(touch.clientX - tapStartX);
+            const dy = Math.abs(touch.clientY - tapStartY);
+            if (dx < 20 && dy < 20) {
+                window.AndroidInterface?.onTap?.();
+            }
+        });
+        
+        document.addEventListener('touchmove', () => clearTimeout(longTimer));
+        document.addEventListener('selectionchange', () => {
+            const txt = sel()?.toString()?.trim();
+            if (txt && txt.length > 3) {
+                window.AndroidSelectionInterface?.onTextSelected(txt);
+            } else {
+                window.AndroidSelectionInterface?.onSelectionCleared();
+            }
+        });
+        window.AndroidInterface?.onContentLoaded();
+    })();
+""".trimIndent()
+
+// MARK: - JS Interface for Scroll & Content
+class WebViewScrollInterface(private val viewModel: ReaderViewModel) {
+    @JavascriptInterface
+    fun saveScrollPosition(pos: Int) {
+        viewModel.saveScrollPosition(pos)
+    }
+
+    @JavascriptInterface
+    fun onScrollNearBottom() {
+        viewModel.onScrollNearEndOfSection()
+    }
+
+    @JavascriptInterface
+    fun onContentLoaded() {
+        // Optional
+    }
+}
+
+// MARK: - JS Interface for Text Selection
+class WebViewSelectionInterface(private val viewModel: ReaderViewModel) {
+    @JavascriptInterface
+    fun onTextSelected(text: String) {
+        viewModel.onTextSelected(text)
+    }
+
+    @JavascriptInterface
+    fun onSelectionCleared() {
+        viewModel.clearTextSelection()
+    }
+}
+
+// MARK: - Scroll Restoration Helper
+private fun restoreScrollPosition(webView: WebView, targetPos: Int) {
+    var attempt = 0
+    fun tryRestore() {
+        if (attempt >= 20) return
+        webView.postDelayed({
+            val js = """
+                (function(){
+                    if (!window.isTextSelectionActive) {
+                        window.scrollTo(0, $targetPos);
+                        document.documentElement.scrollTop = $targetPos;
+                    }
+                    return window.pageYOffset || document.documentElement.scrollTop;
+                })();
+            """.trimIndent()
+            webView.evaluateJavascript(js) { result ->
+                val currentY = result.replace("\"", "").toIntOrNull() ?: 0
+                if (kotlin.math.abs(currentY - targetPos) > 50 && attempt < 19) {
+                    attempt++
+                    tryRestore()
+                }
+            }
+        }, (100 * (attempt + 1)).toLong())
+    }
+    tryRestore()
+}
+
+// Enum to track input lock states
+enum class InputLockState {
+    NONE,
+    TEXT_SELECTION,
+    MENU_TRANSITION
+}
+
+@Composable
+fun PdfScrollReader(viewModel: ReaderViewModel) {
+    val uiState by viewModel.uiState.collectAsStateWithLifecycle()
+    val configuration = LocalConfiguration.current
+    val screenWidth = configuration.screenWidthDp.dp
+    val listState = rememberLazyListState()
+
+    // Track current visible page more reliably
+    val currentVisiblePage by remember {
+        derivedStateOf {
+            val firstVisible = listState.firstVisibleItemIndex
+            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
+
+            // If we've scrolled past 50% of the current item, consider next item as current
+            if (firstVisibleOffset > 500) { // Adjust threshold as needed
+                minOf(firstVisible + 1, uiState.pdfPageCount - 1)
+            } else {
+                firstVisible
+            }
+        }
+    }
+
+    // Preload pages strategy - load current + adjacent pages
+    LaunchedEffect(currentVisiblePage) {
+        val pagesToLoad = mutableSetOf<Int>()
+
+        // Always load current page and adjacent pages
+        for (i in (currentVisiblePage - 2)..(currentVisiblePage + 3)) {
+            if (i in 0 until uiState.pdfPageCount) {
+                pagesToLoad.add(i)
+            }
+        }
+
+        // Load pages that aren't already cached
+        pagesToLoad.forEach { pageIndex ->
+            if (viewModel.pageCache[pageIndex] == null) {
+                viewModel.loadPdfPage(pageIndex)
+            }
+        }
+    }
+
+    // Update current page in viewModel when visible page changes
+    LaunchedEffect(currentVisiblePage) {
+        if (currentVisiblePage != uiState.currentPdfPage) {
+            viewModel.onPdfPageChanged(currentVisiblePage)
+        }
+    }
+
+    // Smooth scroll to page when programmatically changed (from navigation)
+    LaunchedEffect(uiState.currentPdfPage) {
+        if (uiState.currentPdfPage != currentVisiblePage &&
+            listState.layoutInfo.totalItemsCount > uiState.currentPdfPage) {
+            listState.animateScrollToItem(uiState.currentPdfPage)
+        }
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(Unit) {
+                // Handle tap-to-menu like EPUB reader
+                detectTapGestures(
+                    onTap = { viewModel.onToggleMenuVisibility() }
+                )
+            }
+    ) {
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.surfaceVariant),
+            state = listState,
+            userScrollEnabled = true, // Always allow scrolling
+            flingBehavior = ScrollableDefaults.flingBehavior(),
+            // Add spacing between pages
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(vertical = 8.dp)
+        ) {
+            items(
+                count = uiState.pdfPageCount,
+                key = { index -> "pdf_page_$index" } // More specific key
+            ) { index ->
+                PdfPageItem(
+                    pageIndex = index,
+                    page = viewModel.pageCache[index],
+                    screenWidth = screenWidth,
+                    onLoadPage = { viewModel.loadPdfPage(index) }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun PdfPageItem(
+    pageIndex: Int,
+    page: Page?,
+    screenWidth: Dp,
+    onLoadPage: () -> Unit
+) {
+    // Load page if not cached
+    LaunchedEffect(pageIndex) {
+        if (page == null) {
+            onLoadPage()
+        }
+    }
+
+    when (page) {
+        is Page.PdfPage -> {
+            // Calculate exact dimensions to prevent horizontal scrolling
+            val imageWidth = page.image.width
+            val imageHeight = page.image.height
+            val aspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
+
+            // Calculate height based on screen width to maintain aspect ratio
+            val displayHeight = screenWidth / aspectRatio
+
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(displayHeight)
+                    .padding(horizontal = 4.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Image(
+                        bitmap = page.image.asImageBitmap(),
+                        contentDescription = "Page ${pageIndex + 1}",
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Fit,
+                        alignment = Alignment.Center
+                    )
+                }
+            }
+        }
+
+        else -> {
+            // Loading placeholder with better visual feedback
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(screenWidth * 1.414f) // Approximate A4 ratio height
+                    .padding(horizontal = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+            ) {
+                Box(
+                    modifier = Modifier.fillMaxSize(),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        CircularProgressIndicator(
+                            color = MaterialTheme.colorScheme.primary,
+                            strokeWidth = 3.dp,
+                            modifier = Modifier.size(40.dp)
+                        )
+                        Text(
+                            text = "Loading page ${pageIndex + 1}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+@Composable
+fun SmartGestureOverlay(
+    onToggleMenu: () -> Unit,
+    isInputLocked: Boolean = false
+) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .pointerInput(isInputLocked) {
+                if (!isInputLocked) {
+                    detectTapGestures(
+                        onTap = { onToggleMenu() }
+                    )
+                }
+            }
+    )
+}
+
+@Composable
+fun ReaderSettingsMenu(
+    uiState: ReaderUiState,
+    onThemeChange: (LumoraTheme) -> Unit,
+    onFontSizeChange: (Float) -> Unit,
+    onOrientationChange: (Int) -> Unit,
+    animationTime: Float = 0f
+) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface
+    ) {
+        Column(
+            modifier = Modifier
+                .padding(16.dp)
+                .padding(bottom = 32.dp)
+                .fillMaxWidth(),
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Enhanced header with icon
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Icon(
+                    Icons.Default.Settings,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary
+                )
+                Text(
+                    "Reader Settings",
+                    style = MaterialTheme.typography.headlineSmall,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            HorizontalDivider()
+
+            // Orientation section
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.ScreenRotation,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        "Screen Orientation",
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                // Orientation options
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    // Portrait option
+                    InteractiveBubble(
+                        size = 64.dp,
+                        text = "",
+                        icon = Icons.Default.StayCurrentPortrait,
+                        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
+                        animationTime = animationTime,
+                        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) }
+                    )
+
+                    // Landscape option
+                    InteractiveBubble(
+                        size = 64.dp,
+                        text = "",
+                        icon = Icons.Default.StayCurrentLandscape,
+                        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
+                        animationTime = animationTime,
+                        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }
+                    )
+
+                    // Auto option
+                    InteractiveBubble(
+                        size = 64.dp,
+                        text = "",
+                        icon = Icons.Default.ScreenRotation,
+                        color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
+                            MaterialTheme.colorScheme.primary
+                        else
+                            MaterialTheme.colorScheme.outline,
+                        isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
+                        animationTime = animationTime,
+                        onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            Text(
+                stringResource(id = R.string.theme_title),
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            // Enhanced theme selection with interactive bubbles
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(horizontal = 8.dp)
+            ) {
+                items(LumoraTheme.entries) { theme ->
+                    InteractiveBubble(
+                        size = 64.dp,
+                        text = "",               // empty = icon-only
+                        icon = Icons.Default.Palette,
+                        color = theme.representativeColor,
+                        isSelected = uiState.theme == theme,
+                        animationTime = animationTime,
+                        onClick = { onThemeChange(theme) }
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            // Font size section with enhanced UI
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        Icons.Default.FormatSize,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        stringResource(id = R.string.font_size),
+                        style = MaterialTheme.typography.titleMedium
+                    )
+                }
+
+                // Font size preview
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                    )
+                ) {
+                    Text(
+                        text = "Sample text at ${String.format("%.0f", uiState.fontSizeScale * 100)}%",
+                        modifier = Modifier.padding(16.dp),
+                        style = MaterialTheme.typography.bodyMedium.copy(
+                            fontSize = MaterialTheme.typography.bodyMedium.fontSize * uiState.fontSizeScale
+                        ),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
+                // Enhanced slider with labels
+                Column {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text(
+                            "80%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            "200%",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    Slider(
+                        value = uiState.fontSizeScale,
+                        onValueChange = onFontSizeChange,
+                        valueRange = 0.8f..2.0f,
+                        steps = 11,
+                        colors = SliderDefaults.colors(
+                            thumbColor = MaterialTheme.colorScheme.primary,
+                            activeTrackColor = MaterialTheme.colorScheme.primary,
+                            inactiveTrackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.3f)
+                        )
+                    )
+                }
+            }
+
+            HorizontalDivider()
+
+            // Additional settings with interactive bubbles
+            Text(
+                "Quick Actions",
+                style = MaterialTheme.typography.titleMedium
+            )
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceEvenly
+            ) {
+                InteractiveBubble(
+                    size = 56.dp,
+                    text = "",
+                    icon = Icons.Default.Refresh,
+                    color = MaterialTheme.colorScheme.secondary,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO refresh */ }
+                )
+
+                InteractiveBubble(
+                    size = 56.dp,
+                    text = "",
+                    icon = Icons.Default.Share,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO share */ }
+                )
+
+                InteractiveBubble(
+                    size = 56.dp,
+                    text = "",
+                    icon = Icons.Default.Info,
+                    color = MaterialTheme.colorScheme.outline,
+                    isSelected = false,
+                    animationTime = animationTime,
+                    onClick = { /* TODO info */ }
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun ThemeChip(theme: LumoraTheme, isSelected: Boolean, onClick: () -> Unit) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .clickable(onClick = onClick)
+            .padding(4.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(48.dp)
+                .clip(CircleShape)
+                .background(theme.representativeColor)
+                .border(
+                    width = if (isSelected) 3.dp else 1.dp,
+                    color = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                    shape = CircleShape
+                )
+        )
+        Spacer(modifier = Modifier.height(4.dp))
+        Text(
+            text = stringResource(id = theme.aName),
+            style = MaterialTheme.typography.labelSmall,
+            color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface
+        )
+    }
+}
+
+@Composable
+fun ChunkNavigationBar(
+    currentChunk: Int,
+    totalChunks: Int,
+    onPreviousChunk: () -> Unit,
+    onNextChunk: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.95f),
+        shadowElevation = 8.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .padding(horizontal = 16.dp, vertical = 12.dp)
+                .fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            // Previous button with enhanced styling
+            FilledTonalIconButton(
+                onClick = onPreviousChunk,
+                enabled = currentChunk > 0,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (currentChunk > 0)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (currentChunk > 0)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowBack,
+                    contentDescription = stringResource(id = R.string.previous_section)
+                )
+            }
+
+            // Progress indicator with enhanced styling
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                )
+            ) {
+                Text(
+                    text = stringResource(id = R.string.section_progress, currentChunk + 1, totalChunks),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        fontWeight = androidx.compose.ui.text.font.FontWeight.Medium
+                    ),
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            // Next button with enhanced styling
+            FilledTonalIconButton(
+                onClick = onNextChunk,
+                enabled = currentChunk < totalChunks - 1,
+                colors = IconButtonDefaults.filledTonalIconButtonColors(
+                    containerColor = if (currentChunk < totalChunks - 1)
+                        MaterialTheme.colorScheme.primaryContainer
+                    else
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    contentColor = if (currentChunk < totalChunks - 1)
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    else
+                        MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ArrowForward,
+                    contentDescription = stringResource(id = R.string.next_section)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun LoadingView() {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.surface),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            // Enhanced loading indicator
+            Card(
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                )
+            ) {
+                CircularProgressIndicator(
+                    modifier = Modifier
+                        .size(64.dp)
+                        .padding(12.dp),
+                    color = MaterialTheme.colorScheme.primary,
+                    strokeWidth = 4.dp
+                )
+            }
+
+            Text(
+                text = stringResource(id = R.string.loading_book),
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+        }
+    }
+}
+
+@Composable
+fun ErrorView(error: String?, onRetry: () -> Unit) {
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.1f)),
+        contentAlignment = Alignment.Center
+    ) {
+        Card(
+            modifier = Modifier.padding(32.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.errorContainer
+            ),
+            elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+        ) {
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.padding(24.dp)
+            ) {
+                Icon(
+                    Icons.Default.Error,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onErrorContainer,
+                    modifier = Modifier.size(48.dp)
+                )
+
+                Text(
+                    text = error ?: stringResource(id = R.string.unknown_error_occurred),
+                    color = MaterialTheme.colorScheme.onErrorContainer,
+                    style = MaterialTheme.typography.bodyLarge,
+                    textAlign = TextAlign.Center
+                )
+
+                FilledTonalButton(
+                    onClick = onRetry,
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.error,
+                        contentColor = MaterialTheme.colorScheme.onError
+                    )
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Refresh,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(stringResource(id = R.string.retry))
+                }
+            }
+        }
+    }
+}

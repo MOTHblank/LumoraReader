@@ -1,204 +1,118 @@
 package com.mothblank.lumorareader
 
+import android.content.Intent
+import android.net.Uri
+import androidx.activity.enableEdgeToEdge
 import android.os.Bundle
-import android.widget.Toast
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.shape.CircleShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.rounded.Add
-import androidx.compose.material.icons.rounded.AutoStories
-import androidx.compose.material.icons.rounded.FormatQuote
-import androidx.compose.material.icons.rounded.Palette
-import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.remember
-import androidx.compose.ui.Alignment
+import androidx.appcompat.app.AppCompatDelegate
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.material3.Surface
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.tooling.preview.Preview
-import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
-import com.mothblank.lumorareader.ui.theme.LumoraReaderTheme // Assuming this is your theme file
+import androidx.core.os.LocaleListCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NavType
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
+import androidx.navigation.navArgument
+import com.mothblank.lumorareader.presentation.books.BooksScreen
+import com.mothblank.lumorareader.presentation.home.BubbleHomeScreen
+import com.mothblank.lumorareader.presentation.language.LanguageScreen
+import com.mothblank.lumorareader.presentation.preferences.UserPreferencesViewModel
+import com.mothblank.lumorareader.presentation.quotes.QuotesScreen
+import com.mothblank.lumorareader.presentation.reader.ReaderScreen
+import com.mothblank.lumorareader.presentation.theme.ThemeScreen
+import com.mothblank.lumorareader.ui.theme.LumoraTheme
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.res.stringResource
+import com.mothblank.lumorareader.ui.theme.toColorScheme
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.flow.MutableStateFlow
+import timber.log.Timber
 
 @AndroidEntryPoint
-class MainActivity : ComponentActivity() {
-    // We keep the ViewModel in case you want to navigate to the quotes list
-    // private val viewModel: QuoteViewModel by viewModels()
+class MainActivity : AppCompatActivity() {
+
+    private val bookUriToOpen = MutableStateFlow<Uri?>(null)
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
+        handleIntent(intent)
+
         setContent {
-            LumoraReaderTheme {
-                BubbleHomeScreen()
+            val userPreferencesViewModel: UserPreferencesViewModel = hiltViewModel()
+
+            // Collect theme state
+            val selectedTheme by userPreferencesViewModel.theme.collectAsState()
+            val colorScheme = selectedTheme.toColorScheme()
+            val animatedBackgroundColor by animateColorAsState(
+                targetValue = colorScheme.background,
+                animationSpec = tween(durationMillis = 500),
+                label = stringResource(id = R.string.theme_background_animation)
+            )
+
+            // Collect language state and apply changes reactively
+            val selectedLanguage by userPreferencesViewModel.language.collectAsState()
+            LaunchedEffect(selectedLanguage) {
+                Timber.d("Applying locale '${selectedLanguage.tag}' reactively")
+                val appLocales = LocaleListCompat.forLanguageTags(selectedLanguage.tag)
+                AppCompatDelegate.setApplicationLocales(appLocales)
+            }
+
+            LumoraTheme(theme = selectedTheme) {
+                Surface(
+                    modifier = Modifier.fillMaxSize(),
+                    color = animatedBackgroundColor
+                ) {
+                    val navController = rememberNavController()
+
+                    val bookUri by bookUriToOpen.collectAsState()
+                    LaunchedEffect(bookUri) {
+                        bookUri?.let { uri ->
+                            val encodedUri = Uri.encode(uri.toString())
+                            navController.navigate("reader/$encodedUri")
+                            bookUriToOpen.value = null
+                        }
+                    }
+
+                    NavHost(
+                        navController = navController,
+                        startDestination = "home"
+                    ) {
+                        composable("home") { BubbleHomeScreen(navController) }
+                        composable("quotes") { QuotesScreen(navController) }
+                        composable("theme") { ThemeScreen(navController) }
+                        composable("language") { LanguageScreen() }
+                        composable("books") { BooksScreen(navController) }
+                        composable(
+                            route = "reader/{bookUri}",
+                            arguments = listOf(navArgument("bookUri") { type = NavType.StringType })
+                        ) {
+                            ReaderScreen()
+                        }
+                    }
+                }
             }
         }
     }
-}
 
-@Composable
-fun BubbleHomeScreen() {
-    val context = LocalContext.current
-
-    // This is the main container with the dark gradient background
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                brush = Brush.verticalGradient(
-                    colors = listOf(
-                        Color(0xFF0D1B3E), // Dark Blue
-                        Color(0xFF1E3A8A)  // Lighter Blue
-                    )
-                )
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        // Theme Bubble (Bottom Right)
-        InteractiveBubble(
-            size = 120.dp,
-            text = "Theme",
-            icon = Icons.Rounded.Palette,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(x = 80.dp, y = 160.dp),
-            gradient = Brush.radialGradient(
-                colors = listOf(
-                    Color(0x6693C5FD), // Lighter, semi-transparent
-                    Color(0x4D3B82F6)
-                ),
-                radius = 150f
-            )
-        ) {
-            Toast.makeText(context, "Theme customization coming soon!", Toast.LENGTH_SHORT).show()
-        }
-
-        // Quotes Bubble (Top Right)
-        InteractiveBubble(
-            size = 180.dp,
-            text = "Quotes",
-            icon = Icons.Rounded.FormatQuote,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(x = 60.dp, y = -120.dp),
-            gradient = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xAAFB923C), // Orange-ish tint
-                    Color(0x99F472B6)  // Pink-ish tint
-                ),
-                radius = 250f
-            )
-        ) {
-            // TODO: Navigate to the Quotes screen
-            Toast.makeText(context, "Navigating to Quotes...", Toast.LENGTH_SHORT).show()
-        }
-
-        // Books Bubble (Center Left)
-        InteractiveBubble(
-            size = 240.dp,
-            text = "Books",
-            icon = Icons.Rounded.AutoStories,
-            modifier = Modifier
-                .align(Alignment.Center)
-                .offset(x = (-80).dp, y = 20.dp),
-            gradient = Brush.radialGradient(
-                colors = listOf(
-                    Color(0xAAF472B6), // Pink
-                    Color(0x9967E8F9)  // Cyan
-                ),
-                radius = 300f
-            )
-        ) {
-            // Launch the FolioReader with teaching.epub from assets
-            val intent = android.content.Intent(context, com.mothblank.lumorareader.folioreader.ui.activity.FolioActivity::class.java)
-            intent.putExtra(
-                com.mothblank.lumorareader.folioreader.ui.activity.FolioActivity.INTENT_EPUB_SOURCE_PATH,
-                "file:///android_asset/teaching.epub"
-            )
-            intent.putExtra(
-                com.mothblank.lumorareader.folioreader.ui.activity.FolioActivity.INTENT_EPUB_SOURCE_TYPE,
-                com.mothblank.lumorareader.folioreader.ui.activity.FolioActivity.EpubSourceType.ASSETS
-            )
-            context.startActivity(intent)
-        }
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleIntent(intent)
     }
-}
 
-@Composable
-fun InteractiveBubble(
-    size: Dp,
-    text: String,
-    icon: ImageVector,
-    modifier: Modifier = Modifier,
-    gradient: Brush,
-    onClick: () -> Unit
-) {
-    Box(
-        modifier = modifier
-            .size(size)
-            .clip(CircleShape)
-            .background(brush = gradient)
-            .clickable(
-                interactionSource = remember { MutableInteractionSource() },
-                indication = null, // No ripple effect to keep the bubble clean
-                onClick = onClick
-            ),
-        contentAlignment = Alignment.Center
-    ) {
-        // Glossy effect overlay
-        Box(
-            modifier = Modifier
-                .size(size)
-                .offset(x = (-20).dp, y = (-20).dp)
-                .background(
-                    brush = Brush.radialGradient(
-                        colors = listOf(
-                            Color.White.copy(alpha = 0.2f),
-                            Color.White.copy(alpha = 0.0f)
-                        ),
-                        radius = size.value / 2
-                    ),
-                    shape = CircleShape
-                )
-        )
-
-        // Content (Icon and Text)
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.Center
-        ) {
-            Icon(
-                imageVector = icon,
-                contentDescription = text,
-                tint = Color.White,
-                modifier = Modifier.size(size * 0.35f) // Icon size is proportional to bubble size
-            )
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(
-                text = text,
-                color = Color.White.copy(alpha = 0.9f),
-                fontSize = (size.value / 12).sp, // Text size is proportional
-                fontWeight = FontWeight.Bold
-            )
+    private fun handleIntent(intent: Intent?) {
+        Timber.d("Handling intent: ${intent?.action} with data: ${intent?.data}")
+        if (intent?.action == Intent.ACTION_VIEW && intent.data != null) {
+            bookUriToOpen.value = intent.data
         }
-    }
-}
-
-@Preview(showBackground = true, widthDp = 360, heightDp = 740)
-@Composable
-fun BubbleHomeScreenPreview() {
-    LumoraReaderTheme {
-        BubbleHomeScreen()
     }
 }

@@ -18,10 +18,9 @@ dependencyResolutionManagement {
     repositories {
         google()
         mavenCentral()
-        jcenter() // Required for com.daimajia.swipe:SwipeLayout
+        maven { url = uri("https://jitpack.io") }
     }
 }
 
 rootProject.name = "LumoraReader"
 include(":app")
- 

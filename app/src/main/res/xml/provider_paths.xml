@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <!-- This tells the FileProvider that it is allowed to share files
+         from our app's cache directory. -->
+    <cache-path
+        name="cached_books"
+        path="." />
+</paths>
+
+    

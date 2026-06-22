@@ -1,26 +1,108 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="purple_200">#FFBB86FC</color>
-    <color name="purple_500">#FF6200EE</color>
-    <color name="purple_700">#FF3700B3</color>
-    <color name="teal_200">#FF03DAC5</color>
-    <color name="teal_700">#FF018786</color>
-    <color name="black">#FF000000</color>
-    <color name="white">#FFFFFFFF</color>
-    <color name="widget_background">#222B45</color>
-    <color name="widget_text_color">#FFFFFF</color>
-    <color name="webview_night">#222B45</color>
-    <color name="colorPrimary">#6200EE</color>
-    <color name="colorPrimaryDark">#3700B3</color>
-    <color name="colorAccent">#03DAC5</color>
-    <color name="default_theme_accent_color">#F472B6</color>
-    <color name="app_gray">#888888</color>
-    <color name="night_title_text_color">#FFFFFF</color>
-    <color name="highlight_blue">#448AFF</color>
-    <color name="highlight_green">#69F0AE</color>
-    <color name="highlight_pink">#FF4081</color>
-    <color name="highlight_yellow">#FFEB3B</color>
-    <color name="transparent_black">#80000000</color>
-    <color name="borders">#DDDDDD</color>
-    <color name="grey_color">#888888</color>
+    <!-- DEFAULT Theme -->
+    <color name="theme_default_primary">#FF4682B4</color>
+    <color name="theme_default_onPrimary">#FFFFFFFF</color>
+    <color name="theme_default_primaryContainer">#FFADD8E6</color>
+    <color name="theme_default_onPrimaryContainer">#FF000000</color>
+    <color name="theme_default_secondary">#FFFFFFFF</color>
+    <color name="theme_default_onSecondary">#FF000000</color>
+    <color name="theme_default_tertiary">#FF4682B4</color>
+    <color name="theme_default_onTertiary">#FFFFFFFF</color>
+
+
+    <!-- GOTH Theme -->
+    <color name="theme_goth_primary">#FF606060</color>
+    <color name="theme_goth_onPrimary">#FFFFFFFF</color>
+    <color name="theme_goth_primaryContainer">#FF2C2C2C</color>
+    <color name="theme_goth_onPrimaryContainer">#FFFFFFFF</color>
+    <color name="theme_goth_secondary">#FF404040</color>
+    <color name="theme_goth_onSecondary">#FFFFFFFF</color>
+    <color name="theme_goth_tertiary">#FF606060</color>
+    <color name="theme_goth_onTertiary">#FFFFFFFF</color>
+
+
+    <!-- COQUETTE Theme -->
+    <color name="theme_coquette_primary">#FFD8AAB7</color>
+    <color name="theme_coquette_onPrimary">#FF000000</color>
+    <color name="theme_coquette_primaryContainer">#FFF5E6E8</color>
+    <color name="theme_coquette_onPrimaryContainer">#FF000000</color>
+    <color name="theme_coquette_secondary">#FFE8D5D8</color>
+    <color name="theme_coquette_onSecondary">#FF000000</color>
+    <color name="theme_coquette_tertiary">#FFD8AAB7</color>
+    <color name="theme_coquette_onTertiary">#FF000000</color>
+
+
+    <!-- PIRATE Theme -->
+    <color name="theme_pirate_primary">#FF5E3A1E</color>
+    <color name="theme_pirate_onPrimary">#FFFFFFFF</color>
+    <color name="theme_pirate_primaryContainer">#FFD2B48C</color>
+    <color name="theme_pirate_onPrimaryContainer">#FF5E3A1E</color>
+    <color name="theme_pirate_secondary">#FF8B4513</color>
+    <color name="theme_pirate_onSecondary">#FFFFFFFF</color>
+    <color name="theme_pirate_tertiary">#FF5E3A1E</color>
+    <color name="theme_pirate_onTertiary">#FFFFFFFF</color>
+
+    <!-- NATURE Theme -->
+    <color name="theme_nature_primary">#FF228B22</color>
+    <color name="theme_nature_onPrimary">#FFFFFFFF</color>
+    <color name="theme_nature_primaryContainer">#FF8FBC8F</color>
+    <color name="theme_nature_onPrimaryContainer">#FF0D4D0D</color>
+    <color name="theme_nature_secondary">#FF556B2F</color>
+    <color name="theme_nature_onSecondary">#FFFFFFFF</color>
+    <color name="theme_nature_tertiary">#FF8FBC8F</color>
+    <color name="theme_nature_onTertiary">#FF0D4D0D</color>
+
+
+    <!-- VAMPIRE Theme -->
+    <color name="theme_vampire_primary">#FF8B0000</color>
+    <color name="theme_vampire_onPrimary">#FFFFFFFF</color>
+    <color name="theme_vampire_primaryContainer">#FF4B0082</color>
+    <color name="theme_vampire_onPrimaryContainer">#FFFFFFFF</color>
+    <color name="theme_vampire_secondary">#FFC71585</color>
+    <color name="theme_vampire_onSecondary">#FFFFFFFF</color>
+    <color name="theme_vampire_tertiary">#FFC71585</color>
+    <color name="theme_vampire_onTertiary">#FFFFFFFF</color>
+
+
+    <!-- ROMANCE Theme -->
+    <color name="theme_romance_primary">#FFDC143C</color>
+    <color name="theme_romance_onPrimary">#FFFFFFFF</color>
+    <color name="theme_romance_primaryContainer">#FFFFC0CB</color>
+    <color name="theme_romance_onPrimaryContainer">#FFDC143C</color>
+    <color name="theme_romance_secondary">#FFFF69B4</color>
+    <color name="theme_romance_onSecondary">#FFFFFFFF</color>
+    <color name="theme_romance_tertiary">#FFDC143C</color>
+    <color name="theme_romance_onTertiary">#FFFFFFFF</color>
+
+    <!-- GRUNGE Theme -->
+    <color name="theme_grunge_primary">#FF708090</color>
+    <color name="theme_grunge_onPrimary">#FFFFFFFF</color>
+    <color name="theme_grunge_primaryContainer">#FF696969</color>
+    <color name="theme_grunge_onPrimaryContainer">#FFFFFFFF</color>
+    <color name="theme_grunge_secondary">#FF2F4F4F</color>
+    <color name="theme_grunge_onSecondary">#FFFFFFFF</color>
+    <color name="theme_grunge_tertiary">#FF708090</color>
+    <color name="theme_grunge_onTertiary">#FFFFFFFF</color>
+
+    <!-- MYSTIC Theme -->
+    <color name="theme_mystic_primary">#FF8A2BE2</color>
+    <color name="theme_mystic_onPrimary">#FFFFFFFF</color>
+    <color name="theme_mystic_primaryContainer">#FF4B0082</color>
+    <color name="theme_mystic_onPrimaryContainer">#FFFFFFFF</color>
+    <color name="theme_mystic_secondary">#FFDDA0DD</color>
+    <color name="theme_mystic_onSecondary">#FF4B0082</color>
+    <color name="theme_mystic_tertiary">#FFDDA0DD</color>
+    <color name="theme_mystic_onTertiary">#FF4B0082</color>
+
+    <!-- CYBER Theme -->
+    <color name="theme_cyber_primary">#FF00FF00</color>
+    <color name="theme_cyber_onPrimary">#FF000000</color>
+    <color name="theme_cyber_primaryContainer">#FF008000</color>
+    <color name="theme_cyber_onPrimaryContainer">#FF000000</color>
+    <color name="theme_cyber_secondary">#FF00CED1</color>
+    <color name="theme_cyber_onSecondary">#FF000000</color>
+    <color name="theme_cyber_tertiary">#FF00FF00</color>
+    <color name="theme_cyber_onTertiary">#FF000000</color>
+
 </resources>

@@ -1,5 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!--
+    Base application theme. This is now a clean shell that correctly inherits
+    from Material 3. All window and color details are handled by Jetpack Compose
+    and the enableEdgeToEdge() call in MainActivity.
+    -->
+    <style name="Theme.LumoraReader" parent="Theme.Material3.DayNight.NoActionBar" />
+    <style name="Theme.LumoraReader.NoActionBar" parent="Theme.LumoraReader" />
+    <style name="AppTheme" parent="Theme.LumoraReader" />
 
-    <style name="Theme.LumoraReader" parent="android:Theme.Material.Light.NoActionBar" />
 </resources>
