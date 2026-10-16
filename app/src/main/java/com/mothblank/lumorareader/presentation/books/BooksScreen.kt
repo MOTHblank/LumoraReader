@@ -270,12 +270,23 @@ private fun RecentBookRow(book: RecentBook, onClick: () -> Unit) {
                 )
                 // This call works perfectly with the updated function below
                 Text(
-                    text = formatTimestamp(book.lastOpened),
+                    text = if (book.isAvailable) formatTimestamp(book.lastOpened)
+                        else stringResource(R.string.book_file_unavailable),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                book.progress?.let { progress ->
+                    Text(
+                        text = stringResource(
+                            R.string.book_reading_progress,
+                            (progress.coerceIn(0f, 1f) * 100).toInt()
+                        ),
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
             }
             FloatingActionButton(
                 onClick = onClick,
