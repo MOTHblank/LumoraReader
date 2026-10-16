@@ -15,5 +15,8 @@ data class RecentBook(
     // Optional but powerful additions for a richer UI
     val author: String? = null,
     val coverImageUri: String? = null, // A local URI to a cached cover image
-    val progress: Float? = null // Reading progress, e.g., 0.5f for 50%
+    val progress: Float? = null, // Normalized progress from 0f to 1f
+    val positionIndex: Int = 0, // PDF page or EPUB chunk, zero-based
+    val scrollOffset: Int = 0, // EPUB scroll offset within the chunk
+    val isAvailable: Boolean = true
 )
