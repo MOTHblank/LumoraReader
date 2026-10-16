@@ -35,10 +35,11 @@ class PdfBookReader(
     init {
         var openedDescriptor: ParcelFileDescriptor? = null
         try {
-            openedDescriptor = context.contentResolver.openFileDescriptor(Uri.parse(bookUri), "r")
+            val descriptor = context.contentResolver.openFileDescriptor(Uri.parse(bookUri), "r")
                 ?: throw IOException("The PDF content provider returned no file descriptor")
-            val openedRenderer = PdfRenderer(openedDescriptor)
-            pfd = openedDescriptor
+            openedDescriptor = descriptor
+            val openedRenderer = PdfRenderer(descriptor)
+            pfd = descriptor
             renderer = openedRenderer
         } catch (error: Exception) {
             // PdfRenderer may throw after the descriptor has been acquired.
