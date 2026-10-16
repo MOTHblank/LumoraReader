@@ -33,7 +33,9 @@ class BooksViewModel @Inject constructor(
 
     private fun fetchRecentBooks() {
         viewModelScope.launch {
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
+            recentBooksRepository.observeRecentBooks().collect { books ->
+                _recentBooks.value = books
+            }
         }
     }
 
@@ -54,7 +56,6 @@ class BooksViewModel @Inject constructor(
                 coverImageUri = bookDetails.coverImageUri
             )
             recentBooksRepository.addRecentBook(newBook)
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
         }
     }
 
@@ -62,7 +63,6 @@ class BooksViewModel @Inject constructor(
         viewModelScope.launch {
             metaCache.remove(uri)              // optional: evict from cache
             recentBooksRepository.removeRecentBook(uri)
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
         }
     }
 
@@ -70,7 +70,6 @@ class BooksViewModel @Inject constructor(
         viewModelScope.launch {
             metaCache.clear()                  // optional: clear cache
             recentBooksRepository.clearRecentBooks()
-            _recentBooks.value = emptyList()
         }
     }
 }
