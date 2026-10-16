@@ -131,7 +131,7 @@ class ReaderViewModel @Inject constructor(
                         (saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
                     } else 0
                     currentScrollOffset = if (saved?.positionIndex == initialChunk) {
-                        saved.scrollOffset.coerceAtLeast(0)
+                        saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
                     initialChunkLoaded = false
                     _uiState.update {
