@@ -33,14 +33,21 @@ class PdfBookReader(
     private val renderer: PdfRenderer
 
     init {
+        var openedDescriptor: ParcelFileDescriptor? = null
         try {
-            // Open the file descriptor from the content URI. The "r" mode is for "read".
-            pfd = context.contentResolver.openFileDescriptor(Uri.parse(bookUri), "r")!!
-            // Initialize the PdfRenderer with the file descriptor.
-            renderer = PdfRenderer(pfd)
-        } catch (e: IOException) {
-            // If the file cannot be opened, wrap the exception and rethrow.
-            throw IOException(context.getString(R.string.failed_to_open_pdf_file, bookUri), e)
+            openedDescriptor = context.contentResolver.openFileDescriptor(Uri.parse(bookUri), "r")
+                ?: throw IOException("The PDF content provider returned no file descriptor")
+            val openedRenderer = PdfRenderer(openedDescriptor)
+            pfd = openedDescriptor
+            renderer = openedRenderer
+        } catch (error: Exception) {
+            // PdfRenderer may throw after the descriptor has been acquired.
+            try {
+                openedDescriptor?.close()
+            } catch (closeError: Exception) {
+                error.addSuppressed(closeError)
+            }
+            throw IOException(context.getString(R.string.failed_to_open_pdf_file, bookUri), error)
         }
     }
 
@@ -118,12 +125,11 @@ class PdfBookReader(
      * and prevent memory leaks. The ViewModel's `onCleared()` is the perfect place for this.
      */
     override fun close() {
+        // Always release the descriptor, including when renderer.close() fails.
         try {
             renderer.close()
+        } finally {
             pfd.close()
-        } catch (e: IOException) {
-            // Log or handle the exception if closing fails.
-            e.printStackTrace()
         }
     }
 }
