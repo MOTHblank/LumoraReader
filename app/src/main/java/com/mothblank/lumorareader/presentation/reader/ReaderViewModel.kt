@@ -11,6 +11,9 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.BuildConfig
 import com.mothblank.lumorareader.data.EpubBookReader
+import com.mothblank.lumorareader.data.RecentBooksRepository
+import com.mothblank.lumorareader.domain.model.RecentBook
+import com.mothblank.lumorareader.domain.model.Timestamp
 import com.mothblank.lumorareader.domain.usecase.BookReader
 import com.mothblank.lumorareader.domain.BookType
 import com.mothblank.lumorareader.domain.model.Page
@@ -23,10 +26,13 @@ import com.mothblank.lumorareader.ui.preferences.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.FileNotFoundException
 import java.text.SimpleDateFormat
 import java.util.*
 import javax.inject.Inject
@@ -37,6 +43,7 @@ class ReaderViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
     private val savedStateHandle: SavedStateHandle,
     private val quoteRepository: QuoteRepository,
+    private val recentBooksRepository: RecentBooksRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -44,8 +51,9 @@ class ReaderViewModel @Inject constructor(
     val pageCache = mutableStateMapOf<Int, Page>()
     private var bookReader: BookReader? = null
     private val chunkFileCache = mutableMapOf<String, String>() // Key is "chunkIndex-themeName-fontSize"
-    // Store scroll position for each book URI
-    private val scrollPositions = mutableMapOf<String, Int>()
+    @Volatile private var currentScrollOffset = 0
+    private var initialChunkLoaded = false
+    private var positionSaveJob: Job? = null
     private var currentBookUri: String? = null
     private var originalOrientation: Int? = null
 
@@ -91,33 +99,77 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
-                val bookDetails = bookRepository.getBookDetails(uri)
-                bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
-                // Store book information for quotes
-                _uiState.update { currentState ->
-                    currentState.copy(
-                        bookTitle = bookDetails.title,
-                        bookAuthor = bookDetails.author
-                    )
+                // Reading history is best-effort: a database error must not block opening a file.
+                val saved = try {
+                    recentBooksRepository.getRecentBook(uri)
+                } catch (error: Exception) {
+                    Timber.w(error, "Could not restore reading position")
+                    null
                 }
-                if (bookReader is EpubBookReader) {
-                    val epubReader = bookReader as EpubBookReader
-                    _uiState.update { it.copy(bookType = BookType.EPUB, epubChunkCount = epubReader.getChunkCount()) }
-                    loadEpubChunk(0)
+                val bookDetails = bookRepository.getBookDetails(uri)
+                bookReader?.close()
+                bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
+                try {
+                    recentBooksRepository.addRecentBook(
+                        RecentBook(
+                            title = bookDetails.title,
+                            uri = uri,
+                            author = bookDetails.author,
+                            coverImageUri = bookDetails.coverImageUri,
+                            lastOpened = Timestamp(System.currentTimeMillis())
+                        )
+                    )
+                } catch (error: Exception) {
+                    Timber.w(error, "Could not save book history")
+                }
+
+                _uiState.update { it.copy(bookTitle = bookDetails.title, bookAuthor = bookDetails.author) }
+                val epubReader = bookReader as? EpubBookReader
+                if (epubReader != null) {
+                    val chunkCount = epubReader.getChunkCount()
+                    val initialChunk = if (chunkCount > 0) {
+                        (saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
+                    } else 0
+                    currentScrollOffset = if (saved?.positionIndex == initialChunk) {
+                        saved.scrollOffset.coerceAtLeast(0)
+                    } else 0
+                    initialChunkLoaded = false
+                    _uiState.update {
+                        it.copy(bookType = BookType.EPUB, epubChunkCount = chunkCount, currentChunkIndex = initialChunk)
+                    }
+                    if (chunkCount > 0) {
+                        loadEpubChunk(initialChunk)
+                    } else {
+                        _uiState.update { it.copy(isLoading = false, error = "This EPUB has no readable content") }
+                    }
                 } else {
                     val pageCount = bookReader?.getPageCount() ?: 0
-                    _uiState.update { it.copy(bookType = BookType.PDF, pdfPageCount = pageCount, isLoading = (pageCount == 0)) }
+                    val initialPage = if (pageCount > 0) {
+                        (saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
+                    } else 0
+                    _uiState.update {
+                        it.copy(bookType = BookType.PDF, pdfPageCount = pageCount,
+                            currentPdfPage = initialPage, isLoading = false)
+                    }
                     if (pageCount > 0) {
-                        // Preload first few pages
-                        loadPdfPage(0)
-                        loadPdfPage(1)
-                        loadPdfPage(2)
-                        loadPdfPage(3)
-                        loadPdfPage(4)
+                        for (page in initialPage..minOf(initialPage + 4, pageCount - 1)) {
+                            loadPdfPage(page)
+                        }
                     }
                 }
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = context.getString(R.string.failed_to_open_book, e.message)) }
+            } catch (error: Exception) {
+                if (error is FileNotFoundException || error is SecurityException ||
+                    error.cause is FileNotFoundException || error.cause is SecurityException) {
+                    try {
+                        recentBooksRepository.markUnavailable(uri)
+                    } catch (historyError: Exception) {
+                        Timber.w(historyError, "Could not mark book unavailable")
+                    }
+                }
+                _uiState.update {
+                    it.copy(isLoading = false,
+                        error = context.getString(R.string.failed_to_open_book, error.message))
+                }
             }
         }
     }
@@ -143,9 +195,27 @@ class ReaderViewModel @Inject constructor(
                         FileProvider.getUriForFile(context, authority, file).toString()
                     }
                 }
+                if (initialChunkLoaded && chunkIndex != uiState.value.currentChunkIndex) {
+                    // Save the departing section before its offset is reset.
+                    positionSaveJob?.cancel()
+                    val uri = currentBookUri
+                    if (uri != null) {
+                        try {
+                            recentBooksRepository.updateReadingPosition(
+                                uri, uiState.value.currentChunkIndex, currentScrollOffset,
+                                (uiState.value.currentChunkIndex + 1f) / epubReader.getChunkCount()
+                            )
+                        } catch (error: Exception) {
+                            Timber.w(error, "Could not save departing EPUB section")
+                        }
+                    }
+                    currentScrollOffset = 0
+                }
+                initialChunkLoaded = true
                 _uiState.update {
                     it.copy(isLoading = false, epubFileUri = fileUri, currentChunkIndex = chunkIndex)
                 }
+                schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
             } catch (e: Exception) {
                 _uiState.update { it.copy(isLoading = false, error = "Failed to load content chunk.") }
             }
@@ -186,6 +256,7 @@ class ReaderViewModel @Inject constructor(
     fun onPdfPageChanged(index: Int) {
         if (!uiState.value.isTextSelectionActive) {
             _uiState.update { it.copy(currentPdfPage = index) }
+            schedulePositionSave(index, 0, uiState.value.pdfPageCount)
             // Reset zoom when page changes
             resetPdfPageZoom()
             
@@ -326,17 +397,31 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    // Scroll position management
+    // EPUB JavaScript bridge calls this on a WebView thread.
     fun saveScrollPosition(position: Int) {
-        currentBookUri?.let { uri ->
-            scrollPositions[uri] = position
-        }
+        val state = uiState.value
+        if (!state.isEpub || state.isLoading || position < 0 || position == currentScrollOffset) return
+        currentScrollOffset = position
+        schedulePositionSave(state.currentChunkIndex, position, state.epubChunkCount)
     }
 
-    fun getScrollPosition(): Int {
-        return currentBookUri?.let { uri ->
-            scrollPositions[uri] ?: 0
-        } ?: 0
+    fun getScrollPosition(): Int = currentScrollOffset
+
+    private fun schedulePositionSave(index: Int, offset: Int, total: Int) {
+        val uri = currentBookUri ?: return
+        if (total <= 0) return
+        positionSaveJob?.cancel()
+        positionSaveJob = viewModelScope.launch {
+            // Collapse frequent WebView scroll callbacks into one database write.
+            delay(500)
+            try {
+                recentBooksRepository.updateReadingPosition(
+                    uri, index, offset, (index + 1f) / total
+                )
+            } catch (error: Exception) {
+                Timber.w(error, "Could not persist reading position")
+            }
+        }
     }
 
     // Enhanced auto-categorization with better keyword matching
