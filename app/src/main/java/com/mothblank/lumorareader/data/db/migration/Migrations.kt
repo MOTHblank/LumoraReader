@@ -45,3 +45,24 @@ val MIGRATION_1_3 = object : Migration(1, 3) {
         db.execSQL("ALTER TABLE quotes ADD COLUMN categories TEXT DEFAULT ''")
     }
 }
+
+/**
+ * Keeps the existing quote data and adds persistent, unbounded book history.
+ */
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS reading_history (
+                uri TEXT NOT NULL PRIMARY KEY,
+                title TEXT NOT NULL,
+                author TEXT,
+                coverImageUri TEXT,
+                lastOpened INTEGER NOT NULL,
+                progress REAL,
+                positionIndex INTEGER NOT NULL,
+                scrollOffset INTEGER NOT NULL,
+                isAvailable INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+}

@@ -174,4 +174,6 @@
     <string name="invalid_page_index">Índice de página inválido: %1$d</string>
     <string name="unknown">Desconhecido</string>
     <string name="unsupported_file_type">Tipo de arquivo não suportado para URI: %1$s (nome resolvido: %2$s)</string>
+    <string name="book_file_unavailable">Arquivo indisponível — toque para tentar novamente</string>
+    <string name="book_reading_progress">%1$d%% lido</string>
 </resources>

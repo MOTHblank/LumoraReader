@@ -849,7 +849,11 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                 contentLoaded = false
                             }
                             override fun onPageFinished(v: WebView?, u: String?) {
-                                v?.evaluateJavascript(jsBundle, null)
+                                v?.let { web ->
+                                    web.evaluateJavascript(jsBundle) {
+                                        restoreScrollPosition(web, viewModel.getScrollPosition())
+                                    }
+                                }
                             }
                         }
 
@@ -1034,7 +1038,7 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
-    val listState = rememberLazyListState()
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = uiState.currentPdfPage)
 
     // Track current visible page more reliably
     val currentVisiblePage by remember {

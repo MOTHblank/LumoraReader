@@ -186,4 +186,6 @@
     <string name="quote_text_placeholder">Enter the inspiring passage here…</string>
     <string name="author_placeholder">Enter the author\'s name…</string>
     <string name="search_quotes_placeholder">Type text or author to search…</string>
+    <string name="book_file_unavailable">File unavailable — tap to retry</string>
+    <string name="book_reading_progress">%1$d%% read</string>
 </resources>

@@ -12,6 +12,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,7 +34,9 @@ class BooksViewModel @Inject constructor(
 
     private fun fetchRecentBooks() {
         viewModelScope.launch {
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
+            recentBooksRepository.observeRecentBooks().collect { books ->
+                _recentBooks.value = books
+            }
         }
     }
 
@@ -54,7 +57,6 @@ class BooksViewModel @Inject constructor(
                 coverImageUri = bookDetails.coverImageUri
             )
             recentBooksRepository.addRecentBook(newBook)
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
         }
     }
 
@@ -62,7 +64,6 @@ class BooksViewModel @Inject constructor(
         viewModelScope.launch {
             metaCache.remove(uri)              // optional: evict from cache
             recentBooksRepository.removeRecentBook(uri)
-            _recentBooks.value = recentBooksRepository.getRecentBooks()
         }
     }
 
@@ -70,7 +71,6 @@ class BooksViewModel @Inject constructor(
         viewModelScope.launch {
             metaCache.clear()                  // optional: clear cache
             recentBooksRepository.clearRecentBooks()
-            _recentBooks.value = emptyList()
         }
     }
 }

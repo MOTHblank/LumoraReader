@@ -73,18 +73,25 @@ class EpubBookReader(
 
     // --- Public Interface Methods ---
 
+    // BookReader addresses reading units, which are chunks for EPUBs (not spine chapters).
     override fun getPageCount(): Int = chunkedSpine.size
 
     override suspend fun getPage(pageIndex: Int): Page = withContext(Dispatchers.IO) {
-        if (pageIndex < 0 || pageIndex >= spine.size) throw IndexOutOfBoundsException(context.getString(R.string.invalid_chapter_index, pageIndex))
-        val chapterPath = spine[pageIndex]
-        val opfParent = File(parseContainer()).parent ?: ""
-        val chapterFile = File(tempDir, File(opfParent, chapterPath).path)
-        val htmlContent = chapterFile.readText(Charsets.UTF_8)
-        Page.EpubPage(htmlContent, contentBaseUrl)
+        if (pageIndex !in chunkedSpine.indices) {
+            throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, pageIndex))
+        }
+        val body = chunkedSpine[pageIndex].joinToString("\n<hr class=\"chapter-break\">\n") {
+            getChapterContent(it)
+        }
+        Page.EpubPage("<html><head><meta charset=\"utf-8\"></head><body>$body</body></html>", contentBaseUrl)
     }
 
-    override fun getTableOfContents(): List<Pair<String, Int>> = tableOfContents
+    // ToC parsers resolve spine indices; convert them to public chunk indices.
+    override fun getTableOfContents(): List<Pair<String, Int>> =
+        tableOfContents.mapNotNull { (title, chapterIndex) ->
+            val chunkIndex = chunkedSpine.indexOfFirst { chapterIndex in it }
+            if (chunkIndex >= 0) title to chunkIndex else null
+        }
 
     override fun close() {
         tempDir.deleteRecursively()

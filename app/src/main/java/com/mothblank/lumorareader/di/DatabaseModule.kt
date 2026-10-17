@@ -4,6 +4,11 @@ import android.content.Context
 import androidx.room.Room
 import com.mothblank.lumorareader.data.db.AppDatabase
 import com.mothblank.lumorareader.data.db.dao.QuoteDao
+import com.mothblank.lumorareader.data.db.dao.RecentBookDao
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_1_2
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_1_3
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_2_3
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_3_4
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -23,7 +28,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "lumora-db"
         )
-            // .addMigrations(...) // Add your migrations here when you have them.
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4)
             .build()
     }
 
@@ -33,4 +38,7 @@ object DatabaseModule {
         // Hilt knows how to provide the 'database' parameter because of the function above.
         return database.quoteDao()
     }
+
+    @Provides
+    fun provideRecentBookDao(database: AppDatabase): RecentBookDao = database.recentBookDao()
 }
