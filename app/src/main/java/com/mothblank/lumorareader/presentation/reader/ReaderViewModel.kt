@@ -2,7 +2,6 @@ package com.mothblank.lumorareader.presentation.reader
 
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.net.Uri
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.core.content.FileProvider
 import androidx.lifecycle.SavedStateHandle
