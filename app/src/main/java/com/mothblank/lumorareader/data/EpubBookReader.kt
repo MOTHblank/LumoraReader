@@ -267,9 +267,16 @@ class EpubBookReader(
         </html>
         """.trimIndent()
 
-        val tempHtmlFile = File(tempDir, "scroll_view_chunk_${chunkIndex}_${theme.name}_${fontSizeScale}.html")
-        tempHtmlFile.writeText(finalHtml, Charsets.UTF_8)
-        return@withContext tempHtmlFile
+        // Each cache incarnation gets a distinct path: a previous WebView may still
+        // be reading an evicted file with the same theme and font size.
+        val tempHtmlFile = File.createTempFile("scroll_view_chunk_${chunkIndex}_", ".html", tempDir)
+        try {
+            tempHtmlFile.writeText(finalHtml, Charsets.UTF_8)
+            return@withContext tempHtmlFile
+        } catch (failure: Exception) {
+            tempHtmlFile.delete()
+            throw failure
+        }
     }
 
     private fun Color.toHex(): String {
