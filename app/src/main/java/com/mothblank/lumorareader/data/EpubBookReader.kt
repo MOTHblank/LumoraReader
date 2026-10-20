@@ -56,23 +56,28 @@ class EpubBookReader(
         // enforcing the principle of least privilege.
         val cacheSubdir = File(context.cacheDir, "epub_cache")
         tempDir = File(cacheSubdir, "epub_${bookUri.hashCode()}").apply { mkdirs() }
-        unzipEpub()
+        try {
+            unzipEpub()
 
-        val filename = Uri.parse(bookUri).lastPathSegment ?: "Unknown Book"
-        title = filename.substringBeforeLast(".")
+            val filename = Uri.parse(bookUri).lastPathSegment ?: "Unknown Book"
+            title = filename.substringBeforeLast(".")
 
-        val opfPath = parseContainer()
-        contentBaseUrl = "file://${tempDir.absolutePath}/"
-        spine = parseOpf(opfPath)
-        createChunks()
+            val opfPath = parseContainer()
+            contentBaseUrl = "file://${tempDir.absolutePath}/"
+            spine = parseOpf(opfPath)
+            createChunks()
 
-        // Parse Table of Contents
-        val toc = mutableListOf<Pair<String, Int>>()
-        navHref?.let { toc.addAll(parseNav(it)) }
-        if (toc.isEmpty()) {
-            ncxHref?.let { toc.addAll(parseNcx(it)) }
+            // Parse Table of Contents
+            val toc = mutableListOf<Pair<String, Int>>()
+            navHref?.let { toc.addAll(parseNav(it)) }
+            if (toc.isEmpty()) {
+                ncxHref?.let { toc.addAll(parseNcx(it)) }
+            }
+            tableOfContents.addAll(toc)
+        } catch (failure: Exception) {
+            tempDir.deleteRecursively()
+            throw failure
         }
-        tableOfContents.addAll(toc)
     }
 
     // --- Public Interface Methods ---
