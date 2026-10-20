@@ -56,7 +56,7 @@ class ReaderViewModel @Inject constructor(
     // Access-ordered LRU: retain file paths, not just content:// URIs.
     private val chunkFileCache = LinkedHashMap<String, CachedEpubChunk>(16, 0.75f, true)
     private val epubFilesInUse = mutableMapOf<String, Int>()
-    private val deferredChunkDeletes = mutableSetOf<File>()
+    private val deferredChunkDeletes = mutableMapOf<String, MutableSet<File>>()
     private val pdfPageJobs = mutableMapOf<Int, Job>()
     private var readerGeneration = 0L
     private var epubLoadGeneration = 0L
@@ -269,12 +269,10 @@ class ReaderViewModel @Inject constructor(
             epubFilesInUse[uri] = remaining
         } else {
             epubFilesInUse.remove(uri)
-            val iterator = deferredChunkDeletes.iterator()
-            while (iterator.hasNext()) {
-                val file = iterator.next()
-                // The active cached entry must not be removed by a late WebView callback.
+            // An evicted page is safe to delete only after its last WebView is gone.
+            deferredChunkDeletes.remove(uri)?.forEach { file ->
                 if (chunkFileCache.values.none { it.uri == uri && it.file == file }) {
-                    if (deleteChunkFile(file)) iterator.remove()
+                    deleteChunkFile(file)
                 }
             }
         }
@@ -293,7 +291,7 @@ class ReaderViewModel @Inject constructor(
             if (entry.uri == protectedUri) continue
             iterator.remove()
             if ((epubFilesInUse[entry.uri] ?: 0) > 0) {
-                deferredChunkDeletes.add(entry.file)
+                deferredChunkDeletes.getOrPut(entry.uri) { mutableSetOf() }.add(entry.file)
             } else {
                 deleteChunkFile(entry.file)
             }
@@ -303,7 +301,7 @@ class ReaderViewModel @Inject constructor(
     private fun clearEpubChunkCache() {
         chunkFileCache.values.forEach { entry ->
             if ((epubFilesInUse[entry.uri] ?: 0) > 0) {
-                deferredChunkDeletes.add(entry.file)
+                deferredChunkDeletes.getOrPut(entry.uri) { mutableSetOf() }.add(entry.file)
             } else {
                 deleteChunkFile(entry.file)
             }
@@ -567,7 +565,7 @@ class ReaderViewModel @Inject constructor(
         pdfPageJobs.clear()
         positionSaveJob?.cancel()
         clearEpubChunkCache()
-        deferredChunkDeletes.forEach { deleteChunkFile(it) }
+        deferredChunkDeletes.values.flatten().forEach { deleteChunkFile(it) }
         deferredChunkDeletes.clear()
         epubFilesInUse.clear()
         bookReader?.close()
