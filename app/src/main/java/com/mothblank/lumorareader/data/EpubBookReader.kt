@@ -30,6 +30,10 @@ class EpubBookReader(
     private val spine: List<String>
     private val chapterCache = mutableMapOf<Int, String>()
     private val maxChunkSize = 75000
+    // Upper bounds for untrusted EPUB ZIP entries, including archives with unknown ZIP sizes.
+    private val maxExtractedEntryBytes = 64L * 1024 * 1024
+    private val maxExtractedBookBytes = 512L * 1024 * 1024
+    private val maxArchiveEntries = 10_000
     private val chunkedSpine = mutableListOf<List<Int>>()
     private val bodyContentRegex = Regex("<body[^>]*>(.*?)</body>", setOf(RegexOption.DOT_MATCHES_ALL, RegexOption.IGNORE_CASE))
 
@@ -275,46 +279,83 @@ class EpubBookReader(
     // --- Robust Parsing Engine ---
 
     private fun unzipEpub() {
-        context.contentResolver.openInputStream(Uri.parse(bookUri))?.use { inputStream ->
-            ZipInputStream(inputStream).use { zipInputStream ->
-                var entry = zipInputStream.nextEntry
-                while (entry != null) {
-                    val file = File(tempDir, entry.name)
-                    
-                    // Security Check: Prevent Zip Slip path traversal vulnerability
-                    val canonicalPath = file.canonicalPath
-                    val tempDirCanonicalPath = tempDir.canonicalPath
-                    if (!canonicalPath.startsWith(tempDirCanonicalPath + File.separator) && canonicalPath != tempDirCanonicalPath) {
-                        throw SecurityException("Malicious ZIP entry with path traversal: ${entry.name}")
-                    }
+        // If extraction fails, do not leave a partially expanded untrusted archive on disk.
+        try {
+            context.contentResolver.openInputStream(Uri.parse(bookUri))?.use { inputStream ->
+                ZipInputStream(inputStream).use { zipInputStream ->
+                    val rootPath = tempDir.canonicalPath
+                    val buffer = ByteArray(16 * 1024)
+                    var totalBytes = 0L
+                    var entryCount = 0
+                    var entry = zipInputStream.nextEntry
+                    while (entry != null) {
+                        entryCount++
+                        if (entryCount > maxArchiveEntries) {
+                            throw IOException("EPUB contains too many ZIP entries")
+                        }
+                        val entryName = entry.name
+                        val file = File(tempDir, entryName)
 
-                    if (entry.isDirectory) {
-                        file.mkdirs()
-                    } else {
-                        file.parentFile?.mkdirs()
-                        FileOutputStream(file).use { it.write(zipInputStream.readBytes()) }
+                        // Reject path traversal even when archives use ../ or absolute paths.
+                        val canonicalPath = file.canonicalPath
+                        if (!canonicalPath.startsWith(rootPath + File.separator) &&
+                            canonicalPath != rootPath
+                        ) {
+                            throw SecurityException("Malicious ZIP entry with path traversal: ${entryName}")
+                        }
 
-                        // Track media files
-                        val extension = file.extension.lowercase()
-                        when {
-                            extension in setOf("png", "jpg", "jpeg", "gif", "svg", "webp") -> {
-                                mediaFiles[entry.name] = file.absolutePath
+                        if (entry.isDirectory) {
+                            if (!file.isDirectory && !file.mkdirs()) {
+                                throw IOException("Failed to create EPUB directory: ${entryName}")
                             }
-                            extension == "css" -> {
-                                cssFiles.add(entry.name)
+                        } else {
+                            if (entry.size > maxExtractedEntryBytes) {
+                                throw IOException("EPUB entry exceeds extraction limit: ${entryName}")
                             }
-                            extension in setOf("ttf", "otf", "woff", "woff2") -> {
-                                mediaFiles[entry.name] = file.absolutePath
+                            file.parentFile?.let { parent ->
+                                if (!parent.isDirectory && !parent.mkdirs()) {
+                                    throw IOException("Failed to create EPUB directory: ${entryName}")
+                                }
                             }
-                            extension in setOf("mp3", "mp4", "webm", "ogg") -> {
-                                mediaFiles[entry.name] = file.absolutePath
+
+                            var entryBytes = 0L
+                            FileOutputStream(file).use { output ->
+                                while (true) {
+                                    val bytesRead = zipInputStream.read(buffer)
+                                    if (bytesRead == -1) break
+                                    entryBytes += bytesRead
+                                    totalBytes += bytesRead
+                                    // Check actual streamed bytes: many ZIP entries have unknown sizes.
+                                    if (entryBytes > maxExtractedEntryBytes ||
+                                        totalBytes > maxExtractedBookBytes
+                                    ) {
+                                        throw IOException("EPUB extracted-size limit exceeded: ${entryName}")
+                                    }
+                                    output.write(buffer, 0, bytesRead)
+                                }
+                            }
+
+                            // Only track fully extracted files.
+                            val extension = file.extension.lowercase()
+                            when {
+                                extension in setOf("png", "jpg", "jpeg", "gif", "svg", "webp") ->
+                                    mediaFiles[entryName] = file.absolutePath
+                                extension == "css" -> cssFiles.add(entryName)
+                                extension in setOf("ttf", "otf", "woff", "woff2", "mp3", "mp4", "webm", "ogg") ->
+                                    mediaFiles[entryName] = file.absolutePath
                             }
                         }
+                        zipInputStream.closeEntry()
+                        entry = zipInputStream.nextEntry
                     }
-                    entry = zipInputStream.nextEntry
                 }
-            }
-        } ?: throw IOException(context.getString(R.string.failed_to_open_input_stream, bookUri))
+            } ?: throw IOException(context.getString(R.string.failed_to_open_input_stream, bookUri))
+        } catch (failure: Exception) {
+            tempDir.deleteRecursively()
+            mediaFiles.clear()
+            cssFiles.clear()
+            throw failure
+        }
 
         Timber.d("Extracted ${mediaFiles.size} media files and ${cssFiles.size} CSS files")
     }
