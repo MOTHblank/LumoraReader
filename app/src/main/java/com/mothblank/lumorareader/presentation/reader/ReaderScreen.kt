@@ -871,8 +871,9 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
         LoadingView()
     }
 
-    // Cleanup on dispose
-    DisposableEffect(Unit) {
+    // Release the old generated HTML only after its WebView has been destroyed.
+    DisposableEffect(fileUri) {
+        if (fileUri != null) viewModel.onEpubWebViewAttached(fileUri)
         onDispose {
             webView?.let { w ->
                 w.stopLoading()
@@ -881,6 +882,7 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                 w.destroy()
             }
             webView = null
+            if (fileUri != null) viewModel.onEpubWebViewReleased(fileUri)
         }
     }
 }

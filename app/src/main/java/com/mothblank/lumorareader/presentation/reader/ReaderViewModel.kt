@@ -2,10 +2,8 @@ package com.mothblank.lumorareader.presentation.reader
 
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.net.Uri
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.core.content.FileProvider
-import androidx.core.net.toFile
 import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -25,6 +23,7 @@ import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import com.mothblank.lumorareader.ui.preferences.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -32,6 +31,7 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import timber.log.Timber
+import java.io.File
 import java.io.FileNotFoundException
 import java.text.SimpleDateFormat
 import java.util.*
@@ -50,7 +50,17 @@ class ReaderViewModel @Inject constructor(
     val uiState: StateFlow<ReaderUiState> = _uiState.asStateFlow()
     val pageCache = mutableStateMapOf<Int, Page>()
     private var bookReader: BookReader? = null
-    private val chunkFileCache = mutableMapOf<String, String>() // Key is "chunkIndex-themeName-fontSize"
+    private data class CachedEpubChunk(val uri: String, val file: File)
+    private val maxCachedEpubChunks = 8
+    // Access-ordered LRU: retain file paths, not just content:// URIs.
+    private val chunkFileCache = LinkedHashMap<String, CachedEpubChunk>(16, 0.75f, true)
+    private val epubFilesInUse = mutableMapOf<String, Int>()
+    private val deferredChunkDeletes = mutableMapOf<String, MutableSet<File>>()
+    private val pdfPageJobs = mutableMapOf<Int, Job>()
+    private var readerGeneration = 0L
+    private var epubLoadGeneration = 0L
+    private var epubChunkJob: Job? = null
+    private var bookOpenJob: Job? = null
     @Volatile private var currentScrollOffset = 0
     private var initialChunkLoaded = false
     private var positionSaveJob: Job? = null
@@ -96,7 +106,16 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun openBook(uri: String) {
-        viewModelScope.launch {
+        // Invalidate requests before replacing the reader, even if opening suspends.
+        bookOpenJob?.cancel()
+        readerGeneration++
+        pdfPageJobs.values.forEach { it.cancel() }
+        pdfPageJobs.clear()
+        pageCache.clear()
+        epubChunkJob?.cancel()
+        epubLoadGeneration++
+        clearEpubChunkCache()
+        bookOpenJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             try {
                 // Reading history is best-effort: a database error must not block opening a file.
@@ -176,27 +195,35 @@ class ReaderViewModel @Inject constructor(
 
     private fun loadEpubChunk(chunkIndex: Int) {
         val epubReader = bookReader as? EpubBookReader ?: return
-        if (chunkIndex < 0 || chunkIndex >= epubReader.getChunkCount()) return
-        viewModelScope.launch {
+        if (chunkIndex !in 0 until epubReader.getChunkCount()) return
+
+        epubChunkJob?.cancel()
+        val requestGeneration = ++epubLoadGeneration
+        val bookGeneration = readerGeneration
+        epubChunkJob = viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, epubFileUri = null) }
             try {
                 val currentState = uiState.value
                 val currentTheme = currentState.theme
                 val currentFontSizeScale = currentState.fontSizeScale
                 val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale"
-                val fileUri = chunkFileCache.getOrPut(cacheKey) {
-                    withContext(Dispatchers.IO) {
-                        val file = epubReader.generateScrollableHtmlFile(
-                            chunkIndex = chunkIndex,
-                            fontSizeScale = currentFontSizeScale,
-                            theme = currentTheme // Pass the theme enum
-                        )
-                        val authority = "${BuildConfig.APPLICATION_ID}.provider"
-                        FileProvider.getUriForFile(context, authority, file).toString()
-                    }
-                }
+                val cachedChunk = chunkFileCache[cacheKey] ?: withContext(Dispatchers.IO) {
+                    val file = epubReader.generateScrollableHtmlFile(
+                        chunkIndex = chunkIndex,
+                        fontSizeScale = currentFontSizeScale,
+                        theme = currentTheme
+                    )
+                    val authority = "${BuildConfig.APPLICATION_ID}.provider"
+                    CachedEpubChunk(FileProvider.getUriForFile(context, authority, file).toString(), file)
+                }.also { chunkFileCache[cacheKey] = it }
+
+                if (requestGeneration != epubLoadGeneration ||
+                    bookGeneration != readerGeneration || bookReader !== epubReader
+                ) return@launch
+
+                // The old page may still be displayed. Defer its deletion until disposal.
+                evictEpubChunks(protectedUri = cachedChunk.uri)
                 if (initialChunkLoaded && chunkIndex != uiState.value.currentChunkIndex) {
-                    // Save the departing section before its offset is reset.
                     positionSaveJob?.cancel()
                     val uri = currentBookUri
                     if (uri != null) {
@@ -211,15 +238,74 @@ class ReaderViewModel @Inject constructor(
                     }
                     currentScrollOffset = 0
                 }
+                if (requestGeneration != epubLoadGeneration ||
+                    bookGeneration != readerGeneration || bookReader !== epubReader
+                ) return@launch
                 initialChunkLoaded = true
                 _uiState.update {
-                    it.copy(isLoading = false, epubFileUri = fileUri, currentChunkIndex = chunkIndex)
+                    it.copy(isLoading = false, epubFileUri = cachedChunk.uri, currentChunkIndex = chunkIndex)
                 }
                 schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
-            } catch (e: Exception) {
-                _uiState.update { it.copy(isLoading = false, error = "Failed to load content chunk.") }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.e(error, "Failed to load EPUB chunk $chunkIndex")
+                if (requestGeneration == epubLoadGeneration) {
+                    _uiState.update { it.copy(isLoading = false, error = "Failed to load content chunk.") }
+                }
             }
         }
+    }
+
+    // Called from the WebView's lifecycle on the main thread.
+    fun onEpubWebViewAttached(uri: String) {
+        epubFilesInUse[uri] = (epubFilesInUse[uri] ?: 0) + 1
+    }
+
+    fun onEpubWebViewReleased(uri: String) {
+        val remaining = (epubFilesInUse[uri] ?: 0) - 1
+        if (remaining > 0) {
+            epubFilesInUse[uri] = remaining
+        } else {
+            epubFilesInUse.remove(uri)
+            // An evicted page is safe to delete only after its last WebView is gone.
+            deferredChunkDeletes.remove(uri)?.forEach { file ->
+                if (chunkFileCache.values.none { it.uri == uri && it.file == file }) {
+                    deleteChunkFile(file)
+                }
+            }
+        }
+    }
+
+    private fun deleteChunkFile(file: File): Boolean {
+        if (!file.exists() || file.delete()) return true
+        Timber.w("Failed to delete cached EPUB chunk: ${file.absolutePath}")
+        return false
+    }
+
+    private fun evictEpubChunks(protectedUri: String? = null) {
+        val iterator = chunkFileCache.entries.iterator()
+        while (chunkFileCache.size > maxCachedEpubChunks && iterator.hasNext()) {
+            val entry = iterator.next().value
+            if (entry.uri == protectedUri) continue
+            iterator.remove()
+            if ((epubFilesInUse[entry.uri] ?: 0) > 0) {
+                deferredChunkDeletes.getOrPut(entry.uri) { mutableSetOf() }.add(entry.file)
+            } else {
+                deleteChunkFile(entry.file)
+            }
+        }
+    }
+
+    private fun clearEpubChunkCache() {
+        chunkFileCache.values.forEach { entry ->
+            if ((epubFilesInUse[entry.uri] ?: 0) > 0) {
+                deferredChunkDeletes.getOrPut(entry.uri) { mutableSetOf() }.add(entry.file)
+            } else {
+                deleteChunkFile(entry.file)
+            }
+        }
+        chunkFileCache.clear()
     }
 
     fun nextEpubChunk() {
@@ -240,35 +326,45 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    // Dedicated function to load a single PDF page
+    // One render per page and reader generation; stale renders never populate the UI cache.
     fun loadPdfPage(index: Int) {
-        if (index < 0 || index >= uiState.value.pdfPageCount || pageCache.containsKey(index)) return
-        viewModelScope.launch {
+        val reader = bookReader ?: return
+        if (!uiState.value.isPdf || index !in 0 until uiState.value.pdfPageCount ||
+            pageCache.containsKey(index) || pdfPageJobs.containsKey(index)
+        ) return
+        val generation = readerGeneration
+        val renderJob = viewModelScope.launch {
             try {
-                val pageResult = withContext(Dispatchers.IO) { bookReader?.getPage(index) }
-                if (pageResult != null) pageCache[index] = pageResult
-            } catch (e: Exception) {
-                Timber.e(e, "Failed to load PDF page $index")
+                val pageResult = withContext(Dispatchers.IO) { reader.getPage(index) }
+                val center = uiState.value.currentPdfPage
+                if (generation == readerGeneration && bookReader === reader &&
+                    uiState.value.isPdf && index in (center - 5)..(center + 5)
+                ) {
+                    pageCache[index] = pageResult
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.e(error, "Failed to load PDF page $index")
+            } finally {
+                if (pdfPageJobs[index] === coroutineContext[Job]) {
+                    pdfPageJobs.remove(index)
+                }
             }
         }
+        pdfPageJobs[index] = renderJob
     }
 
     fun onPdfPageChanged(index: Int) {
+        if (index !in 0 until uiState.value.pdfPageCount) return
         if (!uiState.value.isTextSelectionActive) {
             _uiState.update { it.copy(currentPdfPage = index) }
             schedulePositionSave(index, 0, uiState.value.pdfPageCount)
-            // Reset zoom when page changes
             resetPdfPageZoom()
-            
-            // Prune the PDF page cache to prevent OutOfMemoryError
-            prunePdfPageCache(index)
 
-            // Preload adjacent pages
-            // Previous page
-            if (index > 0) {
-                loadPdfPage(index - 1)
-            }
-            // Next pages
+            prunePdfPageCache(index)
+            if (index > 0) loadPdfPage(index - 1)
+            loadPdfPage(index)
             loadPdfPage(index + 1)
             loadPdfPage(index + 2)
             loadPdfPage(index + 3)
@@ -278,8 +374,10 @@ class ReaderViewModel @Inject constructor(
     private fun prunePdfPageCache(currentPageIndex: Int) {
         val keepRange = (currentPageIndex - 5)..(currentPageIndex + 5)
         val keysToRemove = pageCache.keys.filter { it !in keepRange }
-        keysToRemove.forEach { key ->
-            pageCache.remove(key)
+        keysToRemove.forEach { pageCache.remove(it) }
+        pdfPageJobs.entries.filter { it.key !in keepRange }.forEach { (index, job) ->
+            pdfPageJobs.remove(index)
+            job.cancel()
         }
         if (keysToRemove.isNotEmpty()) {
             Timber.d("Pruned ${keysToRemove.size} pages from PDF render cache. Remaining cache size: ${pageCache.size}")
@@ -460,17 +558,17 @@ class ReaderViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        bookOpenJob?.cancel()
+        epubChunkJob?.cancel()
+        pdfPageJobs.values.forEach { it.cancel() }
+        pdfPageJobs.clear()
+        positionSaveJob?.cancel()
+        clearEpubChunkCache()
+        deferredChunkDeletes.values.flatten().forEach { deleteChunkFile(it) }
+        deferredChunkDeletes.clear()
+        epubFilesInUse.clear()
         bookReader?.close()
         pageCache.clear()
-        chunkFileCache.values.forEach { uri ->
-            try {
-                val file = Uri.parse(uri).toFile()
-                if (file.exists()) file.delete()
-            } catch (e: Exception) {
-                Timber.w("Failed to delete cached EPUB chunk: $e")
-            }
-        }
-        chunkFileCache.clear()
         super.onCleared()
     }
 }
