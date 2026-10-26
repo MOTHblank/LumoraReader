@@ -536,25 +536,17 @@ class ReaderViewModel @Inject constructor(
     )
 
     private fun autoCategorizeTheme(text: String): LumoraTheme {
-        val inputWords = text.lowercase()
-            .split(Regex("[^a-z0-9]"))
-            .filter { it.isNotBlank() && it.length > 2 } // Filter out very short words
+        // Whole-word matches avoid categorizing unrelated text by a substring.
+        // A quote with no recognized words must retain the default theme.
+        val words = Regex("[\\p{L}\\p{N}]+")
+            .findAll(text.lowercase(Locale.ROOT))
+            .map { it.value }
             .toSet()
-        if (inputWords.isEmpty()) return LumoraTheme.DEFAULT
-        val normalized = " ${text.lowercase().replace(Regex("[^a-z0-9 ]"), " ")} "
         return themeKeywords.entries
-            .maxByOrNull { (_, keywords) ->
-                keywords.count { word -> normalized.contains(" $word ") }
-            }?.key ?: LumoraTheme.DEFAULT
-        val themeScores = themeKeywords.mapValues { (_, keywords) ->
-            inputWords.count { word ->
-                keywords.any { keyword ->
-                    word.contains(keyword) || keyword.contains(word)
-                }
-            }
-        }
-        val bestMatch = themeScores.filter { it.value > 0 }.maxByOrNull { it.value }
-        return bestMatch?.key ?: LumoraTheme.DEFAULT
+            .map { (theme, keywords) -> theme to keywords.count { it in words } }
+            .filter { (_, score) -> score > 0 }
+            .maxByOrNull { (_, score) -> score }
+            ?.first ?: LumoraTheme.DEFAULT
     }
 
     override fun onCleared() {
