@@ -2,6 +2,7 @@ package com.mothblank.lumorareader.presentation.reader
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.graphics.Bitmap
@@ -78,7 +79,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -105,20 +105,22 @@ import com.mothblank.lumorareader.domain.model.Page
 import com.mothblank.lumorareader.presentation.home.components.InteractiveBubble
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import com.mothblank.lumorareader.ui.theme.representativeColor
-import kotlinx.coroutines.delay
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    var animationTime by remember { mutableFloatStateOf(0f) }
-
-    LaunchedEffect(Unit) {
-        while (true) {
-            animationTime += 1f
-            delay(16) // 60fps
+    var showBookInfo by remember { mutableStateOf(false) }
+    val shareBook: () -> Unit = {
+        val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
+        val author = uiState.bookAuthor?.takeIf { it.isNotBlank() }
+        val description = if (author == null) title else "$title\\nBy $author"
+        val intent = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_TEXT, description)
         }
+        context.startActivity(Intent.createChooser(intent, "Share book"))
     }
     LaunchedEffect(Unit) {
         val activity = context as? Activity
@@ -243,7 +245,6 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 icon = Icons.Default.Close,
                                 color = MaterialTheme.colorScheme.error,
                                 isSelected = false,
-                                animationTime = animationTime,
                                 onClick = { viewModel.clearTextSelection() }
                             )
 
@@ -254,7 +255,6 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 icon = Icons.Default.FormatQuote,
                                 color = MaterialTheme.colorScheme.primary,
                                 isSelected = true,               // keeps the glow
-                                animationTime = animationTime,
                                 onClick = { viewModel.saveSelectedQuote() }
                             )
                         }
@@ -359,12 +359,40 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             onThemeChange = { viewModel.onThemeChange(it) },
                             onFontSizeChange = { viewModel.onFontSizeChange(it) },
                             onOrientationChange = { viewModel.onOrientationChange(it) },
-                            animationTime = animationTime,
+                            onRefresh = { viewModel.retryLoading() },
+                            onShare = shareBook,
+                            onShowInfo = { showBookInfo = true },
                             isLandscape = isLandscape
                         )
                     }
                 }
             }
+        }
+        if (showBookInfo) {
+            val format = when {
+                uiState.isPdf -> "PDF"
+                uiState.isEpub -> "EPUB"
+                else -> "Unknown"
+            }
+            AlertDialog(
+                onDismissRequest = { showBookInfo = false },
+                title = { Text("Book information") },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Title: ${uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Unknown"}")
+                        Text("Author: ${uiState.bookAuthor?.takeIf { it.isNotBlank() } ?: "Unknown"}")
+                        Text("Format: $format")
+                        if (uiState.isPdf) {
+                            Text("Page: ${uiState.currentPdfPage + 1} of ${uiState.pdfPageCount}")
+                        } else if (uiState.isEpub) {
+                            Text("Section: ${uiState.currentChunkIndex + 1} of ${uiState.epubChunkCount}")
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showBookInfo = false }) { Text("Close") }
+                }
+            )
         }
     }
 }
@@ -374,7 +402,9 @@ fun ScrollableReaderSettingsMenu(
     onThemeChange: (LumoraTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onOrientationChange: (Int) -> Unit,
-    animationTime: Float = 0f,
+    onRefresh: () -> Unit,
+    onShare: () -> Unit,
+    onShowInfo: () -> Unit,
     isLandscape: Boolean = false
 ) {
     Column(
@@ -424,14 +454,14 @@ fun ScrollableReaderSettingsMenu(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
-                    OrientationButtons(uiState, onOrientationChange, animationTime)
+                    OrientationButtons(uiState, onOrientationChange)
                 }
             } else {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(16.dp)
                 ) {
-                    OrientationButtons(uiState, onOrientationChange, animationTime)
+                    OrientationButtons(uiState, onOrientationChange)
                 }
             }
         }
@@ -469,7 +499,6 @@ fun ScrollableReaderSettingsMenu(
                         icon = Icons.Default.Palette,
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,
-                        animationTime = animationTime,
                         onClick = { onThemeChange(theme) }
                     )
                 }
@@ -562,30 +591,30 @@ fun ScrollableReaderSettingsMenu(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Refresh,
+                    contentDescription = "Reload book",
                     color = MaterialTheme.colorScheme.secondary,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO refresh */ }
+                    onClick = onRefresh
                 )
 
                 InteractiveBubble(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Share,
+                    contentDescription = "Share book",
                     color = MaterialTheme.colorScheme.tertiary,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO share */ }
+                    onClick = onShare
                 )
 
                 InteractiveBubble(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Info,
+                    contentDescription = "Book information",
                     color = MaterialTheme.colorScheme.outline,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO info */ }
+                    onClick = onShowInfo
                 )
             }
         }
@@ -594,8 +623,7 @@ fun ScrollableReaderSettingsMenu(
 @Composable
 fun OrientationButtons(
     uiState: ReaderUiState,
-    onOrientationChange: (Int) -> Unit,
-    animationTime: Float
+    onOrientationChange: (Int) -> Unit
 ) {
     // Portrait option
     InteractiveBubble(
@@ -607,7 +635,6 @@ fun OrientationButtons(
         else
             MaterialTheme.colorScheme.outline,
         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-        animationTime = animationTime,
         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) }
     )
 
@@ -621,7 +648,6 @@ fun OrientationButtons(
         else
             MaterialTheme.colorScheme.outline,
         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
-        animationTime = animationTime,
         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }
     )
 
@@ -635,7 +661,6 @@ fun OrientationButtons(
         else
             MaterialTheme.colorScheme.outline,
         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
-        animationTime = animationTime,
         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
     )
 }
@@ -1233,7 +1258,9 @@ fun ReaderSettingsMenu(
     onThemeChange: (LumoraTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onOrientationChange: (Int) -> Unit,
-    animationTime: Float = 0f
+    onRefresh: () -> Unit,
+    onShare: () -> Unit,
+    onShowInfo: () -> Unit
 ) {
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -1298,7 +1325,6 @@ fun ReaderSettingsMenu(
                         else
                             MaterialTheme.colorScheme.outline,
                         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT,
-                        animationTime = animationTime,
                         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) }
                     )
 
@@ -1312,7 +1338,6 @@ fun ReaderSettingsMenu(
                         else
                             MaterialTheme.colorScheme.outline,
                         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE,
-                        animationTime = animationTime,
                         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) }
                     )
 
@@ -1326,7 +1351,6 @@ fun ReaderSettingsMenu(
                         else
                             MaterialTheme.colorScheme.outline,
                         isSelected = uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
-                        animationTime = animationTime,
                         onClick = { onOrientationChange(ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) }
                     )
                 }
@@ -1352,7 +1376,6 @@ fun ReaderSettingsMenu(
                         icon = Icons.Default.Palette,
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,
-                        animationTime = animationTime,
                         onClick = { onThemeChange(theme) }
                     )
                 }
@@ -1443,30 +1466,30 @@ fun ReaderSettingsMenu(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Refresh,
+                    contentDescription = "Reload book",
                     color = MaterialTheme.colorScheme.secondary,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO refresh */ }
+                    onClick = onRefresh
                 )
 
                 InteractiveBubble(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Share,
+                    contentDescription = "Share book",
                     color = MaterialTheme.colorScheme.tertiary,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO share */ }
+                    onClick = onShare
                 )
 
                 InteractiveBubble(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Info,
+                    contentDescription = "Book information",
                     color = MaterialTheme.colorScheme.outline,
                     isSelected = false,
-                    animationTime = animationTime,
-                    onClick = { /* TODO info */ }
+                    onClick = onShowInfo
                 )
             }
         }
