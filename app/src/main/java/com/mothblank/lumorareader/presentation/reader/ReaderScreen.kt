@@ -115,7 +115,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val shareBook: () -> Unit = {
         val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
         val author = uiState.bookAuthor?.takeIf { it.isNotBlank() }
-        val description = if (author == null) title else "$title\\nBy $author"
+        val description = if (author == null) title else "$title\nBy $author"
         val intent = Intent(Intent.ACTION_SEND).apply {
             type = "text/plain"
             putExtra(Intent.EXTRA_TEXT, description)
