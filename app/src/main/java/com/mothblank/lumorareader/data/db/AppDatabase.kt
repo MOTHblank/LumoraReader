@@ -14,6 +14,7 @@ import com.mothblank.lumorareader.data.db.migration.MIGRATION_3_4
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_4_5
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_5_6
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_6_7
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_7_8
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
 import com.mothblank.lumorareader.data.db.entity.RecentBookEntity
 import com.mothblank.lumorareader.data.db.entity.ReadingBookmarkEntity
@@ -27,7 +28,7 @@ import com.mothblank.lumorareader.data.model.StringListConverter
         RecentBookEntity::class,
         ReadingBookmarkEntity::class,
     ],
-    version = 7,
+    version = 8,
     exportSchema = false
 )
 @TypeConverters(DateTimeConverter::class, StringListConverter::class)
@@ -47,7 +48,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "lumora_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
                 .build()
                 INSTANCE = instance
                 instance
