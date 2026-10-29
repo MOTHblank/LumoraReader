@@ -16,6 +16,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.res.stringResource
+import com.mothblank.lumorareader.R
 import androidx.compose.ui.unit.dp
 import com.mothblank.lumorareader.domain.model.Quote
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
@@ -34,7 +36,7 @@ fun EnhancedQuoteCard(
     onJumpClick: (Quote) -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var showFullText by remember { mutableStateOf(false) }
+    var showFullText by remember(quote.id) { mutableStateOf(false) }
 
     // Get theme-based colors
     val theme = quote.theme?.let { themeName ->
@@ -72,7 +74,7 @@ fun EnhancedQuoteCard(
                     modifier = Modifier.align(Alignment.End)
                 ) {
                     Text(
-                        text = if (showFullText) "Show less" else "Show more",
+                        text = stringResource(if (showFullText) R.string.quote_show_less else R.string.quote_show_more),
                         style = MaterialTheme.typography.labelMedium,
                         color = themeColorScheme.onPrimaryContainer
                     )
@@ -109,7 +111,7 @@ fun EnhancedQuoteCard(
                 quote.pageNumber?.let { pageNumber ->
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "Page $pageNumber",
+                        text = stringResource(R.string.page_number, pageNumber),
                         style = MaterialTheme.typography.labelSmall,
                         color = themeColorScheme.onPrimaryContainer
                     )
@@ -120,7 +122,7 @@ fun EnhancedQuoteCard(
 
             if (!quote.note.isNullOrBlank()) {
                 Text(
-                    text = "Note: ${quote.note}",
+                    text = stringResource(R.string.quote_note_label, quote.note.orEmpty()),
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis
@@ -146,7 +148,7 @@ fun EnhancedQuoteCard(
                         modifier = Modifier.size(18.dp)
                     )
                     Spacer(modifier = Modifier.width(6.dp))
-                    Text("Jump to passage")
+                    Text(stringResource(R.string.quote_jump_to_passage))
                 }
             }
 
@@ -174,7 +176,7 @@ fun EnhancedQuoteCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Edit,
-                            contentDescription = "Edit",
+                            contentDescription = stringResource(R.string.edit_quote),
                             tint = themeColorScheme.onPrimaryContainer
                         )
                     }
@@ -184,7 +186,7 @@ fun EnhancedQuoteCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Add,
-                            contentDescription = "Add to Widget",
+                            contentDescription = stringResource(R.string.add_to_widget),
                             tint = themeColorScheme.onPrimaryContainer
                         )
                     }
@@ -194,7 +196,7 @@ fun EnhancedQuoteCard(
                     ) {
                         Icon(
                             imageVector = Icons.Default.Delete,
-                            contentDescription = "Delete",
+                            contentDescription = stringResource(R.string.delete_quote),
                             tint = themeColorScheme.onPrimaryContainer
                         )
                     }
