@@ -11,6 +11,9 @@ import javax.inject.Singleton
 class ReadingActivityRepository @Inject constructor(private val dao: ReadingSessionDao) {
     fun observeTotals(since: Long): Flow<ReadingActivityTotals> = dao.observeTotals(since)
 
+    fun observeBookTotals(uri: String, since: Long): Flow<ReadingActivityTotals> =
+        dao.observeBookTotals(uri, since)
+
     suspend fun recordForegroundSession(bookUri: String, startTimeMillis: Long, durationMillis: Long) {
         if (bookUri.isBlank() || durationMillis < 1_000L) return
         // Prevent unrealistic durations if the process was suspended unexpectedly.
