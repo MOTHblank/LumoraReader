@@ -84,6 +84,7 @@ class ReaderViewModel @Inject constructor(
     private var bookOpenJob: Job? = null
     @Volatile private var currentScrollOffset = 0
     @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
+    private var selectedEpubAnchor: EpubReadingAnchor? = null
     private var initialChunkLoaded = false
     private var positionSaveJob: Job? = null
     private var currentBookUri: String? = null
@@ -133,6 +134,7 @@ class ReaderViewModel @Inject constructor(
         readerGeneration++
         positionSaveJob?.cancel()
         currentEpubAnchor = null
+        selectedEpubAnchor = null
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
         clearPdfCache()
@@ -152,6 +154,18 @@ class ReaderViewModel @Inject constructor(
                     Timber.w(error, "Could not restore reading position")
                     null
                 }
+                // Only apply a quote destination to the exact document that owns it.
+                val requestedQuote = savedStateHandle.get<Int>("quoteId")
+                    ?.takeIf { it > 0 }
+                    ?.let { quoteId ->
+                        try {
+                            quoteRepository.getQuoteById(quoteId)?.takeIf { it.sourceUri == uri }
+                        } catch (error: Exception) {
+                            Timber.w(error, "Could not resolve quotation destination")
+                            null
+                        }
+                    }
+                val requestedEpubAnchor = EpubReadingAnchor.parse(requestedQuote?.epubAnchor)
                 val bookDetails = bookRepository.getBookDetails(uri)
                 bookReader?.close()
                 bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
@@ -174,14 +188,17 @@ class ReaderViewModel @Inject constructor(
                 if (epubReader != null) {
                     val chunkCount = epubReader.getChunkCount()
                     val initialChunk = if (chunkCount > 0) {
-                        (saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
+                        (requestedEpubAnchor?.spineIndex?.takeIf { it >= 0 }
+                            ?.let { epubReader.chunkForSpine(it) }
+                            ?: requestedQuote?.epubChunkIndex
+                            ?: saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
                     } else 0
-                    currentScrollOffset = if (saved?.positionIndex == initialChunk) {
-                        saved?.scrollOffset?.coerceAtLeast(0) ?: 0
+                    currentScrollOffset = if (requestedQuote == null && saved?.positionIndex == initialChunk) {
+                        saved.scrollOffset.coerceAtLeast(0)
                     } else 0
-                    currentEpubAnchor = if (saved?.positionIndex == initialChunk) {
-                        EpubReadingAnchor.parse(saved?.epubAnchor)
-                    } else null
+                    currentEpubAnchor = if (requestedQuote != null) requestedEpubAnchor
+                        else if (saved?.positionIndex == initialChunk) EpubReadingAnchor.parse(saved?.epubAnchor)
+                        else null
                     initialChunkLoaded = false
                     _uiState.update {
                         it.copy(bookType = BookType.EPUB, epubChunkCount = chunkCount, currentChunkIndex = initialChunk)
@@ -194,7 +211,7 @@ class ReaderViewModel @Inject constructor(
                 } else {
                     val pageCount = bookReader?.getPageCount() ?: 0
                     val initialPage = if (pageCount > 0) {
-                        (saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
+                        (requestedQuote?.pageNumber?.minus(1) ?: saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
                     } else 0
                     _uiState.update {
                         it.copy(bookType = BookType.PDF, pdfPageCount = pageCount,
@@ -557,16 +574,21 @@ class ReaderViewModel @Inject constructor(
     }
 
 
-    fun onTextSelected(text: String) {
+    fun onTextSelected(text: String, sourceFileUri: String? = null, spineIndex: Int = -1, characterOffset: Int = 0, fraction: Float = 0f) {
+        val normalized = text.trim()
+        selectedEpubAnchor = if (normalized.isNotEmpty() &&
+            sourceFileUri != null && sourceFileUri == uiState.value.epubFileUri
+        ) EpubReadingAnchor.create(spineIndex, characterOffset, fraction) else null
         _uiState.update {
             it.copy(
-                selectedText = text.trim(),
-                isTextSelectionActive = text.trim().isNotEmpty()
+                selectedText = normalized,
+                isTextSelectionActive = normalized.isNotEmpty()
             )
         }
     }
 
     fun clearTextSelection() {
+        selectedEpubAnchor = null
         _uiState.update {
             it.copy(
                 selectedText = "",
@@ -592,10 +614,14 @@ class ReaderViewModel @Inject constructor(
                     bookTitle = currentState.bookTitle,
                     bookAuthor = currentState.bookAuthor,
                     pageNumber = if (currentState.isPdf) currentState.currentPdfPage + 1 else null,
-                    chapterTitle = if (currentState.isEpub) "Chapter ${currentState.currentChunkIndex + 1}" else null
+                    chapterTitle = if (currentState.isEpub) "Section ${currentState.currentChunkIndex + 1}" else null,
+                    sourceUri = currentBookUri,
+                    epubChunkIndex = if (currentState.isEpub) currentState.currentChunkIndex else null,
+                    epubAnchor = if (currentState.isEpub) selectedEpubAnchor?.serialize() else null
                 )
                 try {
                     quoteRepository.saveQuote(quote)
+                    selectedEpubAnchor = null
                     _uiState.update {
                         it.copy(
                             selectedText = "",
