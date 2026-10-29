@@ -84,18 +84,20 @@ class RecentBooksRepository @Inject constructor(
                 progress = previous?.progress ?: book.progress,
                 positionIndex = previous?.positionIndex ?: book.positionIndex,
                 scrollOffset = previous?.scrollOffset ?: book.scrollOffset,
+                epubAnchor = previous?.epubAnchor ?: book.epubAnchor,
                 isAvailable = true
             )
         )
     }
 
-    suspend fun updateReadingPosition(uri: String, index: Int, offset: Int, progress: Float) {
+    suspend fun updateReadingPosition(uri: String, index: Int, offset: Int, progress: Float, anchor: String? = null) {
         migrateLegacyHistory()
         dao.updateReadingPosition(
             uri = uri,
             index = index.coerceAtLeast(0),
             offset = offset.coerceAtLeast(0),
-            progress = progress.coerceIn(0f, 1f)
+            progress = progress.coerceIn(0f, 1f),
+            anchor = anchor
         )
     }
 
@@ -123,6 +125,7 @@ class RecentBooksRepository @Inject constructor(
         progress = progress,
         positionIndex = positionIndex,
         scrollOffset = scrollOffset,
+        epubAnchor = epubAnchor,
         isAvailable = isAvailable
     )
 
@@ -135,6 +138,7 @@ class RecentBooksRepository @Inject constructor(
         progress = progress,
         positionIndex = positionIndex,
         scrollOffset = scrollOffset,
+        epubAnchor = epubAnchor,
         isAvailable = isAvailable
     )
 
