@@ -136,6 +136,9 @@ internal fun ReadingPositionSelector(
     if (count < 2) return
     val index = if (uiState.isPdf) uiState.currentPdfPage else uiState.currentChunkIndex
     var selected by remember(uiState.bookType, index) { mutableStateOf(index.toFloat()) }
+    val seekLabel = stringResource(
+        if (uiState.isPdf) R.string.reader_jump_page else R.string.reader_jump_section
+    )
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween) {
@@ -146,7 +149,7 @@ internal fun ReadingPositionSelector(
         }
         Slider(
             modifier = Modifier.semantics {
-                contentDescription = if (uiState.isPdf) "Jump to page" else "Jump to section"
+                contentDescription = seekLabel
             },
             value = selected.coerceIn(0f, (count - 1).toFloat()),
             onValueChange = { selected = it },
@@ -261,8 +264,9 @@ fun ScrollableReaderSettingsMenu(
                         size = 56.dp,
                         text = "",               // empty = icon-only
                         icon = Icons.Default.Palette,
-                        contentDescription = stringResource(id = theme.aName) +
-                            if (uiState.theme == theme) ", selected theme" else ", theme",
+                        contentDescription = if (uiState.theme == theme)
+                            stringResource(R.string.reader_theme_selected, stringResource(theme.aName))
+                        else stringResource(R.string.reader_theme_option, stringResource(theme.aName)),
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,
                         onClick = { onThemeChange(theme) }
@@ -309,6 +313,7 @@ fun ScrollableReaderSettingsMenu(
             }
 
             // Enhanced slider with labels
+            val fontSizeDescription = stringResource(R.string.reader_font_size_a11y)
             Column {
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -327,7 +332,7 @@ fun ScrollableReaderSettingsMenu(
                 }
 
                 Slider(
-                    modifier = Modifier.semantics { contentDescription = "Font size" },
+                    modifier = Modifier.semantics { contentDescription = fontSizeDescription },
                     value = uiState.fontSizeScale,
                     onValueChange = onFontSizeChange,
                     valueRange = 0.8f..2.0f,
@@ -417,8 +422,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.StayCurrentPortrait,
-        contentDescription = "Portrait orientation" +
-            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) ", selected" else "",
+        contentDescription = stringResource(R.string.reader_orientation_portrait) +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) stringResource(R.string.reader_selected) else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
             MaterialTheme.colorScheme.primary
         else
@@ -432,8 +437,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.StayCurrentLandscape,
-        contentDescription = "Landscape orientation" +
-            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) ", selected" else "",
+        contentDescription = stringResource(R.string.reader_orientation_landscape) +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) stringResource(R.string.reader_selected) else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
             MaterialTheme.colorScheme.primary
         else
@@ -447,8 +452,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.ScreenRotation,
-        contentDescription = "Automatic orientation" +
-            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) ", selected" else "",
+        contentDescription = stringResource(R.string.reader_orientation_auto) +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) stringResource(R.string.reader_selected) else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
             MaterialTheme.colorScheme.primary
         else
