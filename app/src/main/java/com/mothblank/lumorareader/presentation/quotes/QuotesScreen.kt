@@ -131,6 +131,11 @@ fun QuotesScreen(
                 gridState = gridState,
                 onDeleteClicked = { quote -> quoteToDelete = quote },
                 onEditClicked = { quote -> quoteToEdit = quote },
+                onJumpClick = { quote ->
+                    quote.sourceUri?.takeIf { it.isNotBlank() }?.let { source ->
+                        navController.navigate("reader/${Uri.encode(source)}?quoteId=${quote.id}")
+                    }
+                },
                 onAddToWidgetClick = { quote ->
                     // Handle adding to widget
                     coroutineScope.launch {
@@ -270,8 +275,8 @@ fun QuotesScreen(
         EditQuoteDialog(
             quote = quoteToEdit!!,
             onDismiss = { quoteToEdit = null },
-            onConfirm = { _, text, author ->
-                viewModel.editQuote(quoteToEdit!!.copy(text = text, author = author))
+            onConfirm = { updated ->
+                viewModel.editQuote(updated)
                 quoteToEdit = null
             }
         )
@@ -281,8 +286,8 @@ fun QuotesScreen(
         EditQuoteDialog(
             quote = Quote(text = "", author = ""),
             onDismiss = { showAddQuoteDialog = false },
-            onConfirm = { _, text, author ->
-                viewModel.addQuote(text, author)
+            onConfirm = { created ->
+                viewModel.addQuote(created)
                 showAddQuoteDialog = false
             }
         )
