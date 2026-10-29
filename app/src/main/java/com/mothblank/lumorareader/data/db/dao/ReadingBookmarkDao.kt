@@ -12,6 +12,16 @@ interface ReadingBookmarkDao {
     @Query("SELECT * FROM reading_bookmarks WHERE bookUri = :uri ORDER BY createdAt DESC, id DESC")
     fun observeBook(uri: String): Flow<List<ReadingBookmarkEntity>>
 
+    @Query("""
+        SELECT * FROM reading_bookmarks WHERE
+            :query = '' OR
+            instr(lower(label), lower(:query)) > 0 OR
+            instr(lower(COALESCE(note, '')), lower(:query)) > 0
+        ORDER BY createdAt DESC, id DESC
+        LIMIT 40
+    """)
+    fun searchAll(query: String): Flow<List<ReadingBookmarkEntity>>
+
     @Insert
     suspend fun insert(bookmark: ReadingBookmarkEntity): Long
 
