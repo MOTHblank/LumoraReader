@@ -231,7 +231,11 @@ class ReaderViewModel @Inject constructor(
             val index = anchor?.spineIndex?.takeIf { it >= 0 }
                 ?.let { epub.chunkForSpine(it) }
                 ?: bookmark.epubChunkIndex ?: return
-            loadEpubChunk(index, targetAnchor = anchor, forceFreshHtml = true)
+            loadEpubChunk(
+                index,
+                targetAnchor = anchor ?: EpubReadingAnchor.create(-1, 0, 0f),
+                forceFreshHtml = true
+            )
         } else if (state.isPdf) {
             bookmark.pdfPageIndex?.let { onPdfPageChanged(it) }
         }
@@ -246,8 +250,8 @@ class ReaderViewModel @Inject constructor(
             val index = anchor?.spineIndex?.takeIf { it >= 0 }
                 ?.let { epub.chunkForSpine(it) } ?: quote.epubChunkIndex ?: return
             loadEpubChunk(
-                index, targetAnchor = anchor, forceFreshHtml = true,
-                quoteToHighlight = quote.text.take(2000)
+                index, targetAnchor = anchor ?: EpubReadingAnchor.create(-1, 0, 0f),
+                forceFreshHtml = true, quoteToHighlight = quote.text.take(2000)
             )
         } else if (state.isPdf) {
             quote.pageNumber?.let { onPdfPageChanged(it - 1) }
