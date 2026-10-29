@@ -179,7 +179,7 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                 fun onTap() {
                                     activeView.post {
                                         if (viewModel.uiState.value.epubFileUri == fileUri) {
-                                            viewModel.onToggleMenuVisibility()
+                                            viewModel.onReaderSurfaceTapped()
                                         }
                                     }
                                 }
