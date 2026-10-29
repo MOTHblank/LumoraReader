@@ -14,5 +14,8 @@ data class RecentBookEntity(
     val positionIndex: Int = 0,
     val scrollOffset: Int = 0,
     val epubAnchor: String? = null,
-    val isAvailable: Boolean = true
+    val isAvailable: Boolean = true,
+    val isFavorite: Boolean = false,
+    val readingStatus: String = "READING",
+    val collectionName: String? = null
 )
