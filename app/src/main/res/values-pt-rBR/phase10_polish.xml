@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quote_show_more">Mostrar mais</string>
+    <string name="quote_show_less">Mostrar menos</string>
+    <string name="quote_note_label">Nota: %1$s</string>
+    <string name="quote_jump_to_passage">Ir para o trecho</string>
+    <string name="quotes_active_filters">Filtros (%1$d)</string>
+    <string name="quotes_clear_filters">Limpar filtros</string>
+    <string name="quotes_no_filter_results">Nenhuma citação corresponde a estes filtros.</string>
+    <string name="reader_quick_actions">Ações rápidas</string>
+    <string name="reader_reload_book">Recarregar livro</string>
+    <string name="reader_share_book">Compartilhar livro</string>
+    <string name="reader_book_information">Informações do livro</string>
+    <string name="library_read_short">Ler</string>
+    <string name="library_edit_short">Editar</string>
+</resources>
