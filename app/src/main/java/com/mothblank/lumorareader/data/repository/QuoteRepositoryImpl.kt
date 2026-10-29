@@ -23,6 +23,8 @@ class QuoteRepositoryImpl @Inject constructor(
 
     override fun observeBookSources(): Flow<List<QuoteBookOption>> = dao.observeBookSources()
 
+    override fun observeAvailableThemes(): Flow<List<String>> = dao.observeAvailableThemes()
+
     override fun observeForBook(uri: String): Flow<List<Quote>> =
         dao.observeForBook(uri).map { entries -> entries.map { it.toDomainModel() } }
 
