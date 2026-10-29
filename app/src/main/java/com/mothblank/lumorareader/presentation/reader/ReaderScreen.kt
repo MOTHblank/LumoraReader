@@ -842,7 +842,11 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                 }
                                 @JavascriptInterface
                                 fun onScrollNearBottom() {
-                                    activeView.post { viewModel.onScrollNearEndOfSection() }
+                                    activeView.post {
+                                        if (viewModel.uiState.value.epubFileUri == fileUri) {
+                                            viewModel.onScrollNearEndOfSection()
+                                        }
+                                    }
                                 }
                                 @JavascriptInterface
                                 fun onContentLoaded() = Unit
