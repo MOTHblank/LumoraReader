@@ -29,8 +29,12 @@ import com.mothblank.lumorareader.R
 @Composable
 fun QuotesScreen(
     navController: NavHostController,
+    initialSearch: String = "",
     viewModel: QuoteViewModel = hiltViewModel()
 ) {
+    LaunchedEffect(initialSearch) {
+        if (initialSearch.isNotBlank()) viewModel.onSearchQueryChange(initialSearch)
+    }
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val quotes = uiState.quotes
     val filterOptions = uiState.filterOptions
