@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_settings_navigation">Reader settings and navigation</string>
+    <string name="reader_clear_text_selection">Clear text selection</string>
+    <string name="reader_save_selected_quote">Save selected text as quotation</string>
+    <string name="reader_zoom_in_pdf">Zoom in PDF</string>
+    <string name="reader_zoom_out_pdf">Zoom out PDF</string>
+    <string name="reader_pdf_page_accessibility">PDF page %1$d</string>
+    <string name="reader_go_to_page_accessibility">Go to page, currently %1$d of %2$d</string>
+    <string name="reader_progress_epub">%1$s, %2$d percent read</string>
+    <string name="reader_progress_pdf">Page %1$d of %2$d, %3$d percent read</string>
+    <string name="reader_orientation_portrait">Portrait orientation</string>
+    <string name="reader_orientation_landscape">Landscape orientation</string>
+    <string name="reader_orientation_auto">Automatic orientation</string>
+    <string name="reader_selected">, selected</string>
+    <string name="reader_theme_selected">%1$s, selected theme</string>
+    <string name="reader_theme_option">%1$s, theme</string>
+    <string name="reader_jump_page">Jump to page</string>
+    <string name="reader_jump_section">Jump to section</string>
+    <string name="reader_font_size_a11y">Font size</string>
+</resources>
