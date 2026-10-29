@@ -7,6 +7,7 @@ import com.google.gson.reflect.TypeToken
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
 import com.mothblank.lumorareader.data.db.entity.RecentBookEntity
 import com.mothblank.lumorareader.domain.model.RecentBook
+import com.mothblank.lumorareader.domain.model.ReadingStatus
 import com.mothblank.lumorareader.domain.model.Timestamp
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
@@ -85,6 +86,9 @@ class RecentBooksRepository @Inject constructor(
                 positionIndex = previous?.positionIndex ?: book.positionIndex,
                 scrollOffset = previous?.scrollOffset ?: book.scrollOffset,
                 epubAnchor = previous?.epubAnchor ?: book.epubAnchor,
+                isFavorite = previous?.isFavorite ?: book.isFavorite,
+                readingStatus = previous?.readingStatus ?: book.readingStatus.name,
+                collectionName = previous?.collectionName ?: book.collectionName,
                 isAvailable = true
             )
         )
@@ -99,6 +103,21 @@ class RecentBooksRepository @Inject constructor(
             progress = progress.coerceIn(0f, 1f),
             anchor = anchor
         )
+    }
+
+    suspend fun setFavorite(uri: String, favorite: Boolean) {
+        migrateLegacyHistory()
+        dao.setFavorite(uri, favorite)
+    }
+
+    suspend fun setReadingStatus(uri: String, status: ReadingStatus) {
+        migrateLegacyHistory()
+        dao.setReadingStatus(uri, status.name)
+    }
+
+    suspend fun setCollection(uri: String, collection: String?) {
+        migrateLegacyHistory()
+        dao.setCollection(uri, collection?.trim()?.take(80)?.ifBlank { null })
     }
 
     suspend fun markUnavailable(uri: String) {
@@ -126,7 +145,10 @@ class RecentBooksRepository @Inject constructor(
         positionIndex = positionIndex,
         scrollOffset = scrollOffset,
         epubAnchor = epubAnchor,
-        isAvailable = isAvailable
+        isAvailable = isAvailable,
+        isFavorite = isFavorite,
+        readingStatus = readingStatus.name,
+        collectionName = collectionName
     )
 
     private fun RecentBookEntity.toModel() = RecentBook(
@@ -139,7 +161,10 @@ class RecentBooksRepository @Inject constructor(
         positionIndex = positionIndex,
         scrollOffset = scrollOffset,
         epubAnchor = epubAnchor,
-        isAvailable = isAvailable
+        isAvailable = isAvailable,
+        isFavorite = isFavorite,
+        readingStatus = runCatching { ReadingStatus.valueOf(readingStatus) }.getOrDefault(ReadingStatus.READING),
+        collectionName = collectionName
     )
 
     companion object {
