@@ -21,8 +21,8 @@ interface RecentBookDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(book: RecentBookEntity)
 
-    @Query("UPDATE reading_history SET positionIndex = :index, scrollOffset = :offset, progress = :progress WHERE uri = :uri")
-    suspend fun updateReadingPosition(uri: String, index: Int, offset: Int, progress: Float)
+    @Query("UPDATE reading_history SET positionIndex = :index, scrollOffset = :offset, progress = :progress, epubAnchor = :anchor WHERE uri = :uri")
+    suspend fun updateReadingPosition(uri: String, index: Int, offset: Int, progress: Float, anchor: String?)
 
     @Query("UPDATE reading_history SET isAvailable = :available WHERE uri = :uri")
     suspend fun updateAvailability(uri: String, available: Boolean)
