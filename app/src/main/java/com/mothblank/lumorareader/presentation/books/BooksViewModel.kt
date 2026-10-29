@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.data.RecentBooksRepository
 import com.mothblank.lumorareader.domain.model.RecentBook
+import com.mothblank.lumorareader.domain.model.ReadingStatus
 import com.mothblank.lumorareader.domain.model.Timestamp
 import com.mothblank.lumorareader.domain.Book
 import com.mothblank.lumorareader.domain.repository.BookRepository
@@ -58,6 +59,18 @@ class BooksViewModel @Inject constructor(
             )
             recentBooksRepository.addRecentBook(newBook)
         }
+    }
+
+    fun setFavorite(book: RecentBook, favorite: Boolean) {
+        viewModelScope.launch { recentBooksRepository.setFavorite(book.uri, favorite) }
+    }
+
+    fun setReadingStatus(book: RecentBook, status: ReadingStatus) {
+        viewModelScope.launch { recentBooksRepository.setReadingStatus(book.uri, status) }
+    }
+
+    fun setCollection(book: RecentBook, collection: String?) {
+        viewModelScope.launch { recentBooksRepository.setCollection(book.uri, collection) }
     }
 
     fun removeRecentBook(uri: String) {
