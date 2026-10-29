@@ -16,6 +16,8 @@ import com.mothblank.lumorareader.data.EpubBookReader
 import com.mothblank.lumorareader.data.EpubChapter
 import com.mothblank.lumorareader.data.PdfBookReader
 import com.mothblank.lumorareader.data.RecentBooksRepository
+import com.mothblank.lumorareader.data.ReadingBookmarksRepository
+import com.mothblank.lumorareader.domain.model.ReadingBookmark
 import com.mothblank.lumorareader.domain.model.EpubReadingAnchor
 import com.mothblank.lumorareader.domain.model.RecentBook
 import com.mothblank.lumorareader.domain.model.Timestamp
@@ -53,6 +55,7 @@ class ReaderViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val quoteRepository: QuoteRepository,
     private val recentBooksRepository: RecentBooksRepository,
+    private val bookmarksRepository: ReadingBookmarksRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -90,6 +93,8 @@ class ReaderViewModel @Inject constructor(
     private var initialChunkLoaded = false
     private var positionSaveJob: Job? = null
     private var currentBookUri: String? = null
+    private var bookmarkObserveJob: Job? = null
+    private var quoteObserveJob: Job? = null
     private var originalOrientation: Int? = null
 
     init {
@@ -152,7 +157,100 @@ class ReaderViewModel @Inject constructor(
             return
         }
         currentBookUri = bookUri
+        observeBookNotebook(bookUri)
         openBook(bookUri)
+    }
+
+    private fun observeBookNotebook(bookUri: String) {
+        bookmarkObserveJob?.cancel()
+        quoteObserveJob?.cancel()
+        _uiState.update { it.copy(bookmarks = emptyList(), bookQuotes = emptyList()) }
+        bookmarkObserveJob = viewModelScope.launch {
+            bookmarksRepository.observeBook(bookUri).collect { bookmarks ->
+                if (currentBookUri == bookUri) {
+                    _uiState.update { it.copy(bookmarks = bookmarks) }
+                }
+            }
+        }
+        quoteObserveJob = viewModelScope.launch {
+            quoteRepository.observeForBook(bookUri).collect { quotes ->
+                if (currentBookUri == bookUri) {
+                    _uiState.update { it.copy(bookQuotes = quotes) }
+                }
+            }
+        }
+    }
+
+    /** Save a bookmark at the precise EPUB spine/character location or PDF page. */
+    fun addBookmark(label: String, note: String?) {
+        val uri = currentBookUri ?: return
+        val state = uiState.value
+        if (state.isLoading || (!state.isEpub && !state.isPdf)) return
+        val cleanedLabel = label.trim().take(120).ifEmpty {
+            if (state.isPdf) "Page ${state.currentPdfPage + 1}"
+            else state.currentChapterTitle ?: "Section ${state.currentChunkIndex + 1}"
+        }
+        val cleanedNote = note?.trim()?.take(2000)?.ifEmpty { null }
+        val bookmark = ReadingBookmark(
+            bookUri = uri,
+            label = cleanedLabel,
+            note = cleanedNote,
+            epubChunkIndex = state.currentChunkIndex.takeIf { state.isEpub },
+            epubAnchor = currentEpubAnchor?.serialize().takeIf { state.isEpub },
+            pdfPageIndex = state.currentPdfPage.takeIf { state.isPdf }
+        )
+        viewModelScope.launch {
+            try { bookmarksRepository.add(bookmark) }
+            catch (e: Exception) { Timber.e(e, "Failed to add reading bookmark") }
+        }
+    }
+
+    fun editBookmark(id: Long, label: String, note: String?) {
+        val uri = currentBookUri ?: return
+        viewModelScope.launch {
+            try { bookmarksRepository.updateNote(uri, id, label.trim().ifEmpty { "Bookmark" }, note?.trim()?.ifEmpty { null }) }
+            catch (e: Exception) { Timber.e(e, "Failed to edit reading bookmark") }
+        }
+    }
+
+    fun deleteBookmark(id: Long) {
+        val uri = currentBookUri ?: return
+        viewModelScope.launch {
+            try { bookmarksRepository.delete(uri, id) }
+            catch (e: Exception) { Timber.e(e, "Failed to delete reading bookmark") }
+        }
+    }
+
+    fun goToBookmark(bookmark: ReadingBookmark) {
+        if (bookmark.bookUri != currentBookUri) return
+        val state = uiState.value
+        if (state.isTextSelectionActive) return
+        if (state.isEpub) {
+            val anchor = EpubReadingAnchor.parse(bookmark.epubAnchor)
+            val epub = bookReader as? EpubBookReader ?: return
+            val index = anchor?.spineIndex?.takeIf { it >= 0 }
+                ?.let { epub.chunkForSpine(it) }
+                ?: bookmark.epubChunkIndex ?: return
+            loadEpubChunk(index, targetAnchor = anchor, forceFreshHtml = true)
+        } else if (state.isPdf) {
+            bookmark.pdfPageIndex?.let { onPdfPageChanged(it) }
+        }
+    }
+
+    fun goToNotebookQuote(quote: Quote) {
+        if (quote.sourceUri != currentBookUri || uiState.value.isTextSelectionActive) return
+        val state = uiState.value
+        if (state.isEpub) {
+            val epub = bookReader as? EpubBookReader ?: return
+            val anchor = EpubReadingAnchor.parse(quote.epubAnchor)
+            val index = anchor?.spineIndex?.takeIf { it >= 0 }
+                ?.let { epub.chunkForSpine(it) } ?: quote.epubChunkIndex ?: return
+            loadEpubChunk(index, targetAnchor = anchor, forceFreshHtml = true)
+            _uiState.update { it.copy(quoteHighlightText = quote.text.take(2000)) }
+        } else if (state.isPdf) {
+            quote.pageNumber?.let { onPdfPageChanged(it - 1) }
+            _uiState.update { it.copy(quoteHighlightText = quote.text.take(2000)) }
+        }
     }
 
     private fun openBook(uri: String) {
@@ -894,6 +992,8 @@ class ReaderViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        bookmarkObserveJob?.cancel()
+        quoteObserveJob?.cancel()
         bookOpenJob?.cancel()
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
