@@ -13,5 +13,10 @@ data class Quote(
     val bookTitle: String? = null,
     val bookAuthor: String? = null,
     val pageNumber: Int? = null,
-    val chapterTitle: String? = null
+    val chapterTitle: String? = null,
+    // Source is optional: existing/manual quotes remain valid without a link.
+    val sourceUri: String? = null,
+    val epubChunkIndex: Int? = null,
+    val epubAnchor: String? = null,
+    val note: String? = null
 )
