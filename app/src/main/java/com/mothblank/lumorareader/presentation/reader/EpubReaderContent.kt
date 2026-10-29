@@ -177,7 +177,11 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                 fun onContentLoaded() = Unit
                                 @JavascriptInterface
                                 fun onTap() {
-                                    activeView.post { viewModel.onToggleMenuVisibility() }
+                                    activeView.post {
+                                        if (viewModel.uiState.value.epubFileUri == fileUri) {
+                                            viewModel.onToggleMenuVisibility()
+                                        }
+                                    }
                                 }
                             }, "AndroidInterface")
 
