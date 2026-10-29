@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_search">Search titles, authors or collections</string>
+    <string name="library_search_hint">Find a book</string>
+    <string name="library_all">All books</string>
+    <string name="library_favorites">Favorites</string>
+    <string name="library_filter_status">Reading status</string>
+    <string name="library_filter_collection">Collection</string>
+    <string name="library_no_collection">No collection</string>
+    <string name="library_all_collections">All collections</string>
+    <string name="library_sort_recent">Recently opened</string>
+    <string name="library_sort_title">Title A–Z</string>
+    <string name="library_sort_progress">Most progress</string>
+    <string name="library_sort">Sort</string>
+    <string name="library_empty_filtered">No books match these filters.</string>
+    <string name="library_status_want_to_read">Want to read</string>
+    <string name="library_status_reading">Reading</string>
+    <string name="library_status_on_hold">On hold</string>
+    <string name="library_status_finished">Finished</string>
+    <string name="library_edit_book">Organize book</string>
+    <string name="library_edit_details">Set a reading status and a collection. These do not change the book file.</string>
+    <string name="library_collection_name">Collection name (optional)</string>
+    <string name="library_create_collection">Type a new collection or use an existing one.</string>
+    <string name="library_save">Save changes</string>
+    <string name="library_cancel">Cancel</string>
+    <string name="library_edit">Organize</string>
+    <string name="library_remove">Remove from library</string>
+    <string name="library_remove_confirm">Remove this book from recent history? The original file will not be deleted.</string>
+    <string name="library_toggle_favorite">Toggle favorite</string>
+    <string name="library_favorite_add">Add to favorites</string>
+    <string name="library_favorite_remove">Remove from favorites</string>
+    <string name="library_open_book">Continue reading</string>
+    <string name="library_unavailable">Book file unavailable</string>
+    <string name="library_collection_label">Collection: %1$s</string>
+    <string name="library_progress_percent">%1$d%% complete</string>
+    <string name="library_books_count">%1$d books</string>
+    <string name="library_stats_reading">Reading</string>
+    <string name="library_stats_finished">Finished</string>
+    <string name="library_stats_favorites">Favorites</string>
+    <string name="library_last_opened">Opened %1$s</string>
+    <string name="library_open_new">Open EPUB or PDF</string>
+    <string name="library_filter_reset">Clear filters</string>
+</resources>
