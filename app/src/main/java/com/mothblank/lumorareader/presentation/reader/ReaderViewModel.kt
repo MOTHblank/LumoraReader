@@ -194,7 +194,7 @@ class ReaderViewModel @Inject constructor(
                             ?: saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
                     } else 0
                     currentScrollOffset = if (requestedQuote == null && saved?.positionIndex == initialChunk) {
-                        saved.scrollOffset.coerceAtLeast(0)
+                        saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
                     currentEpubAnchor = if (requestedQuote != null) requestedEpubAnchor
                         else if (saved?.positionIndex == initialChunk) EpubReadingAnchor.parse(saved?.epubAnchor)
