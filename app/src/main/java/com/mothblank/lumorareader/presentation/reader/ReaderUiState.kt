@@ -14,6 +14,12 @@ data class ReaderUiState(
     val theme: LumoraTheme = LumoraTheme.DEFAULT,
     val fontSizeScale: Float = 1.0f,
     val fontFamily: String = "Georgia",
+    val epubLineSpacing: Float = 1.7f,
+    val epubMargin: String = "Comfortable",
+    val pdfNightMode: Boolean = false,
+    val pdfPageSpacingDp: Int = 8,
+    /** Session-only mode; reading position and customization preferences survive. */
+    val focusMode: Boolean = false,
     val readingProgress: Float = 0f,
     val tableOfContents: List<EpubChapter> = emptyList(),
     val currentSpineIndex: Int = -1,
