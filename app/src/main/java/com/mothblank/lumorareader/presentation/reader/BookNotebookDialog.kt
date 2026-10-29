@@ -61,6 +61,15 @@ fun BookNotebookDialog(
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(locationLabel, style = MaterialTheme.typography.labelMedium)
+                    Text(
+                        stringResource(
+                            R.string.discovery_all_minutes,
+                            state.bookForegroundMillis / 60_000L,
+                            state.bookForegroundSessions
+                        ),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                     Spacer(Modifier.height(8.dp))
                     OutlinedButton(
                         onClick = { addNew = true },
