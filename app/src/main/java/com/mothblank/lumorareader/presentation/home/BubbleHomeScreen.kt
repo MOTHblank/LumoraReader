@@ -259,12 +259,17 @@ fun BubbleHomeScreen(
             Spacer(modifier = Modifier.height(8.dp))
 
             // Asymmetric floating menu bubbles spread across more screen area
-            Box(
+            BoxWithConstraints(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .weight(1f), // Adapt bubble region to portrait devices and controls
+                    .weight(1f),
                 contentAlignment = Alignment.Center
             ) {
+                // Preserve the original composition at normal sizes. On compact
+                // screens scale only the geometry, not palette or animation.
+                val bubbleScale = minOf(
+                    1f, maxWidth.value / 400f, maxHeight.value / 450f
+                ).coerceAtLeast(0.62f)
                 menuBubbles.forEachIndexed { index, bubble ->
                     // Calculate floating position
                     val floatX = sin(time * bubble.floatSpeed * 0.01f + bubble.floatPhase) * bubble.floatRadius
@@ -290,18 +295,19 @@ fun BubbleHomeScreen(
                     Box(
                         modifier = Modifier
                             .offset(
-                                x = bubble.offsetX + floatX.dp,
-                                y = bubble.offsetY + floatY.dp
+                                x = (bubble.offsetX.value + floatX).dp * bubbleScale,
+                                y = (bubble.offsetY.value + floatY).dp * bubbleScale
                             )
                     ) {
                         InteractiveBubble(
-                            size = bubble.size,
+                            size = bubble.size * bubbleScale,
                             text = localizedTitle,
                             icon = bubble.icon,
                             color = bubble.color,
                             isSelected = selectedBubble == index,
                             animationTime = time,
                             onColor = onColor,
+                            contentDescription = localizedTitle,
                             onClick = {
                                 selectedBubble = index
                                 navController.navigate(bubble.route)
