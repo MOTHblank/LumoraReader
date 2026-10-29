@@ -1,6 +1,9 @@
 package com.mothblank.lumorareader.presentation.reader
 
 import androidx.activity.compose.BackHandler
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -132,10 +135,32 @@ import kotlin.math.roundToInt
 fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val lifecycleOwner = LocalLifecycleOwner.current
     var showBookInfo by remember { mutableStateOf(false) }
     var showContents by remember { mutableStateOf(false) }
     var showNotebook by remember { mutableStateOf(false) }
     BackHandler(enabled = uiState.focusMode) { viewModel.setFocusMode(false) }
+    DisposableEffect(lifecycleOwner, viewModel) {
+        val observer = LifecycleEventObserver { _, event ->
+            when (event) {
+                Lifecycle.Event.ON_START -> viewModel.onReaderForeground()
+                Lifecycle.Event.ON_STOP -> viewModel.onReaderBackground()
+                else -> Unit
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose {
+            lifecycleOwner.lifecycle.removeObserver(observer)
+            viewModel.onReaderBackground()
+        }
+    }
+    LaunchedEffect(uiState.isLoading, uiState.error) {
+        if (!uiState.isLoading && uiState.error == null &&
+            lifecycleOwner.lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
+        ) {
+            viewModel.onReaderForeground()
+        }
+    }
     val shareBook: () -> Unit = {
         val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
         val author = uiState.bookAuthor?.takeIf { it.isNotBlank() }
