@@ -17,6 +17,7 @@ Phase 10 is deliberately a **conservation pass**. LumoraReader's existing visual
 - The quote theme filter is populated from the distinct stored themes, independently of the current filtered result set. Searching for a particular theme no longer makes other filter choices disappear.
 - The quotation screen exposes a compact active-filter summary and a one-action clear, plus a distinct no-match state. Existing card styling and the staggered grid stay intact.
 - Quote-card labels (expand/collapse, page, notes, source jump and actions) are localized; text expansion state resets when a different quote occupies a reused card.
+- Quote-card footers keep the original three icon actions when space allows. On compact two-column cards, those actions move into a labeled overflow menu so the author is still readable; the quote-specific color scheme and card styling do not change.
 - Reader quick-action descriptions and theme selected states are localized for screen readers.
 
 ## Non-goals
