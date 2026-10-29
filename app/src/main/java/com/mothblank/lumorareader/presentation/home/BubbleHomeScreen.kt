@@ -20,6 +20,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.res.stringResource
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavController
 import com.mothblank.lumorareader.R
 import com.mothblank.lumorareader.presentation.home.components.InteractiveBubble
@@ -54,7 +56,11 @@ data class MenuBubble(
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun BubbleHomeScreen(navController: NavController) {
+fun BubbleHomeScreen(
+    navController: NavController,
+    overviewViewModel: HomeOverviewViewModel = hiltViewModel()
+) {
+    val overview by overviewViewModel.overview.collectAsStateWithLifecycle()
     val configuration = LocalConfiguration.current
     val density = LocalDensity.current
     val colorScheme = MaterialTheme.colorScheme
@@ -99,7 +105,7 @@ fun BubbleHomeScreen(navController: NavController) {
     )
 
     // Asymmetric menu bubbles with very different sizes and spread out positions
-    val menuBubbles = remember {
+    val menuBubbles = remember(colorScheme) {
         listOf(
             MenuBubble(
                 title = "Books", // Will be replaced with stringResource in Composable
@@ -209,7 +215,7 @@ fun BubbleHomeScreen(navController: NavController) {
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Spacer(modifier = Modifier.height(60.dp))
+            Spacer(modifier = Modifier.height(22.dp))
 
             // App title with enhanced styling
             Text(
@@ -226,14 +232,37 @@ fun BubbleHomeScreen(navController: NavController) {
                 text = stringResource(id = R.string.immerse_yourself),
                 style = MaterialTheme.typography.bodyLarge.copy(fontSize = 16.sp),
                 color = colorScheme.onBackground.copy(alpha = 0.8f),
-                modifier = Modifier.padding(bottom = 80.dp)
+                modifier = Modifier.padding(bottom = 14.dp)
             )
+
+            FilledTonalButton(
+                onClick = { navController.navigate("search") },
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp),
+                shape = androidx.compose.foundation.shape.RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.Search, contentDescription = null)
+                Spacer(Modifier.width(8.dp))
+                Text(stringResource(R.string.home_search))
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = stringResource(
+                    R.string.home_activity_summary,
+                    overview.bookCount,
+                    overview.currentlyReading,
+                    overview.foregroundMillisWeek / 60_000L
+                ),
+                style = MaterialTheme.typography.labelMedium,
+                color = colorScheme.onBackground.copy(alpha = 0.78f),
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Asymmetric floating menu bubbles spread across more screen area
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(450.dp), // Increased height for better spread
+                    .weight(1f), // Adapt bubble region to portrait devices and controls
                 contentAlignment = Alignment.Center
             ) {
                 menuBubbles.forEachIndexed { index, bubble ->
@@ -282,7 +311,7 @@ fun BubbleHomeScreen(navController: NavController) {
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(8.dp))
 
             // Enhanced subtitle with breathing animation
             val breathingAlpha by infiniteTransition.animateFloat(
