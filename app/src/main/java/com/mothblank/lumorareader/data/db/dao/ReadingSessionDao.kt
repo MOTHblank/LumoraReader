@@ -27,4 +27,13 @@ interface ReadingSessionDao {
         FROM reading_sessions
     """)
     fun observeTotals(since: Long): Flow<ReadingActivityTotals>
+
+    @Query("""
+        SELECT COALESCE(SUM(durationMillis), 0) AS totalMillis,
+            COALESCE(SUM(CASE WHEN startedAt >= :since THEN durationMillis ELSE 0 END), 0) AS recentMillis,
+            COUNT(*) AS sessions,
+            COALESCE(SUM(CASE WHEN startedAt >= :since THEN 1 ELSE 0 END), 0) AS recentSessions
+        FROM reading_sessions WHERE bookUri = :uri
+    """)
+    fun observeBookTotals(uri: String, since: Long): Flow<ReadingActivityTotals>
 }
