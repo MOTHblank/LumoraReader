@@ -163,7 +163,7 @@ fun UnifiedSearchScreen(
                         icon = { Icon(Icons.Default.FormatQuote, contentDescription = null) },
                         enabled = true,
                         onClick = {
-                            if (linked) {
+                            if (linked && source != null) {
                                 navController.navigate(
                                     "reader/${Uri.encode(source)}?quoteId=${quote.id}"
                                 )
