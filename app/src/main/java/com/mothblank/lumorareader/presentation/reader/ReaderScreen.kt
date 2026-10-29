@@ -921,18 +921,96 @@ private fun generateJsBundle(): String = """
         let tapStartX, tapStartY;
         let tapTimeout;
         
+        // Capture a spine-specific text offset and scroll fraction. These
+        // remain meaningful after changes to font size and viewport geometry.
+        let restoring = false;
+        const fractionOfScroll = () => {
+            const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+            return max ? Math.min(1, Math.max(0, window.scrollY / max)) : 0;
+        };
+        const visibleTextAnchor = () => {
+            const x = Math.max(1, Math.min(window.innerWidth - 1, window.innerWidth * 0.4));
+            for (const y of [32, 64, window.innerHeight * 0.22, window.innerHeight * 0.45]) {
+                const caret = document.caretRangeFromPoint?.(x, Math.min(y, window.innerHeight - 1));
+                const node = caret?.startContainer;
+                if (!node) continue;
+                const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+                const section = element?.closest?.('[data-lumora-spine]');
+                if (!section) continue;
+                const range = document.createRange();
+                range.selectNodeContents(section);
+                try {
+                    range.setEnd(node, caret.startOffset);
+                    return {
+                        spine: Number(section.dataset.lumoraSpine),
+                        offset: range.toString().length
+                    };
+                } catch (_) { /* Fraction-only fallback for non-text content. */ }
+            }
+            return null;
+        };
         const saveScroll = () => {
+            if (restoring) return;
             clearTimeout(scrollTimeout);
             scrollTimeout = setTimeout(() => {
-                const y = window.pageYOffset || document.documentElement.scrollTop;
+                if (restoring) return;
+                const y = Math.round(window.pageYOffset || document.documentElement.scrollTop);
                 const h = document.documentElement.scrollHeight;
                 const v = window.innerHeight;
-                if (!sel() || sel().isCollapsed) fire('saveScrollPosition', Math.round(y));
+                if (!sel() || sel().isCollapsed) {
+                    const anchor = visibleTextAnchor();
+                    window.AndroidInterface?.saveEpubPosition?.(
+                        y, anchor?.spine ?? -1, anchor?.offset ?? 0, fractionOfScroll()
+                    );
+                }
                 if (y + v + 50 >= h) fire('onScrollNearBottom');
             }, 150);
         };
+        window.lumoraRestorePosition = (spine, offset, fraction, oldPixels) => {
+            restoring = true;
+            const restore = () => {
+                let restored = false;
+                if (spine >= 0 && offset >= 0) {
+                    const section = document.querySelector('[data-lumora-spine="' + spine + '"]');
+                    if (section) {
+                        const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+                        let remaining = offset, node;
+                        while ((node = walker.nextNode())) {
+                            const len = node.textContent.length;
+                            if (remaining <= len) {
+                                const range = document.createRange();
+                                range.setStart(node, Math.max(0, remaining));
+                                range.setEnd(node, Math.min(len, remaining + 1));
+                                const rect = range.getBoundingClientRect();
+                                if (rect && rect.height > 0 && Number.isFinite(rect.top)) {
+                                    window.scrollTo(0, Math.max(0, window.scrollY + rect.top - 28));
+                                    restored = true;
+                                }
+                                break;
+                            }
+                            remaining -= len;
+                        }
+                    }
+                }
+                if (!restored && fraction >= 0 && fraction <= 1) {
+                    const max = Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+                    window.scrollTo(0, fraction * max);
+                    restored = true;
+                }
+                if (!restored) window.scrollTo(0, Math.max(0, oldPixels));
+            };
+            requestAnimationFrame(() => {
+                restore();
+                // Images and fonts can settle after the first layout pass.
+                setTimeout(restore, 220);
+                setTimeout(() => {
+                    restore();
+                    restoring = false;
+                }, 550);
+            });
+        };
         window.addEventListener('scroll', saveScroll, { passive: true });
-        
+
         document.addEventListener('touchstart', (e) => {
             if (e.touches.length === 0) return;
             const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now();
@@ -1019,33 +1097,6 @@ class WebViewSelectionInterface(private val viewModel: ReaderViewModel) {
     fun onSelectionCleared() {
         viewModel.clearTextSelection()
     }
-}
-
-// MARK: - Scroll Restoration Helper
-private fun restoreScrollPosition(webView: WebView, targetPos: Int) {
-    var attempt = 0
-    fun tryRestore() {
-        if (attempt >= 20) return
-        webView.postDelayed({
-            val js = """
-                (function(){
-                    if (!window.isTextSelectionActive) {
-                        window.scrollTo(0, $targetPos);
-                        document.documentElement.scrollTop = $targetPos;
-                    }
-                    return window.pageYOffset || document.documentElement.scrollTop;
-                })();
-            """.trimIndent()
-            webView.evaluateJavascript(js) { result ->
-                val currentY = result.replace("\"", "").toIntOrNull() ?: 0
-                if (kotlin.math.abs(currentY - targetPos) > 50 && attempt < 19) {
-                    attempt++
-                    tryRestore()
-                }
-            }
-        }, (100 * (attempt + 1)).toLong())
-    }
-    tryRestore()
 }
 
 // Enum to track input lock states
