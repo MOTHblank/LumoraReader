@@ -96,6 +96,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.foundation.gestures.awaitFirstDown
@@ -314,7 +316,7 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                detectTapGestures(onTap = { viewModel.onToggleMenuVisibility() })
+                detectTapGestures(onTap = { viewModel.onReaderSurfaceTapped() })
             }
     ) {
         val screenWidth = maxWidth
@@ -324,13 +326,16 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.surfaceVariant),
+                 .background(
+                    if (uiState.pdfNightMode) Color(0xFF161616)
+                    else MaterialTheme.colorScheme.surfaceVariant
+                ),
             state = listState,
             // One-finger page scrolling stays enabled when not zoomed.
             userScrollEnabled = uiState.pdfPageZoomScale <= 1.01f,
             flingBehavior = ScrollableDefaults.flingBehavior(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp)
+            verticalArrangement = Arrangement.spacedBy(uiState.pdfPageSpacingDp.dp),
+            contentPadding = PaddingValues(top = 8.dp, bottom = if (uiState.focusMode) 8.dp else 72.dp)
         ) {
             items(
                 count = uiState.pdfPageCount,
@@ -345,6 +350,8 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
                     offsetX = if (uiState.currentPdfPage == index) uiState.pdfPageOffsetX else 0f,
                     offsetY = if (uiState.currentPdfPage == index) uiState.pdfPageOffsetY else 0f,
                     screenWidth = screenWidth,
+                    nightMode = uiState.pdfNightMode,
+                    focusMode = uiState.focusMode,
                     viewModel = viewModel
                 )
             }
@@ -362,8 +369,22 @@ fun PdfPageItem(
     offsetX: Float,
     offsetY: Float,
     screenWidth: Dp,
+    nightMode: Boolean,
+    focusMode: Boolean,
     viewModel: ReaderViewModel
 ) {
+    // The color filter is applied at draw time. Native rendering, page
+    // resolution, cache keys and bitmap allocations are unaffected.
+    val pageFilter = remember(nightMode) {
+        if (!nightMode) null else ColorFilter.colorMatrix(
+            ColorMatrix(floatArrayOf(
+                -1f, 0f, 0f, 0f, 255f,
+                0f, -1f, 0f, 0f, 255f,
+                0f, 0f, -1f, 0f, 255f,
+                0f, 0f, 0f, 1f, 0f
+            ))
+        )
+    }
     val pageA11yDescription = stringResource(
         R.string.reader_pdf_page_accessibility, pageIndex + 1
     )
@@ -383,7 +404,11 @@ fun PdfPageItem(
                     .fillMaxWidth()
                     .height(displayHeight)
                     .padding(horizontal = 4.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = if (nightMode) Color(0xFF161616)
+                        else MaterialTheme.colorScheme.surface
+                )
             ) {
                 Box(modifier = Modifier.fillMaxSize()) {
                     Canvas(
@@ -437,7 +462,8 @@ fun PdfPageItem(
                         }) {
                             drawImage(
                                 image = page.image.asImageBitmap(),
-                                dstSize = IntSize(drawWidth, drawHeight)
+                                dstSize = IntSize(drawWidth, drawHeight),
+                                colorFilter = pageFilter
                             )
                             if (tile != null && tile.pageIndex == pageIndex && zoom > 1.01f) {
                                 drawImage(
@@ -449,13 +475,14 @@ fun PdfPageItem(
                                     dstSize = IntSize(
                                         (tile.region.width() * drawWidth).roundToInt().coerceAtLeast(1),
                                         (tile.region.height() * drawHeight).roundToInt().coerceAtLeast(1)
-                                    )
+                                    ),
+                                    colorFilter = pageFilter
                                 )
                             }
                         }
                     }
                     // Keyboard and screen-reader accessible alternative to pinch gestures.
-                    if (isCurrentPage) {
+                    if (isCurrentPage && !focusMode) {
                         Row(
                             modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
