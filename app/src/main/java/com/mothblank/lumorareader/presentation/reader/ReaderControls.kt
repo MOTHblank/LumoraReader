@@ -712,7 +712,9 @@ fun ReaderSettingsMenu(
                     InteractiveBubble(
                         size = 64.dp,
                         text = "",               // empty = icon-only
-                        contentDescription = stringResource(id = theme.aName),
+                        contentDescription = if (uiState.theme == theme)
+                            stringResource(R.string.reader_theme_selected, stringResource(theme.aName))
+                        else stringResource(R.string.reader_theme_option, stringResource(theme.aName)),
                         icon = Icons.Default.Palette,
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,
@@ -838,10 +840,14 @@ fun ReaderSettingsMenu(
 
 @Composable
 fun ThemeChip(theme: LumoraTheme, isSelected: Boolean, onClick: () -> Unit) {
+    val spokenLabel = if (isSelected)
+        stringResource(R.string.reader_theme_selected, stringResource(theme.aName))
+    else stringResource(R.string.reader_theme_option, stringResource(theme.aName))
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         modifier = Modifier
             .clickable(onClick = onClick)
+            .semantics(mergeDescendants = true) { contentDescription = spokenLabel }
             .padding(4.dp)
     ) {
         Box(
