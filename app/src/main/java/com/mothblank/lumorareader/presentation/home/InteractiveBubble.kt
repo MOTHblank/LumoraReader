@@ -14,6 +14,8 @@ import androidx.compose.ui.draw.*
 import androidx.compose.ui.graphics.*
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -92,7 +94,9 @@ fun InteractiveBubble(
                 containerColor = color.copy(alpha = 0.92f)
             ),
             elevation = CardDefaults.cardElevation(defaultElevation = elevation),
-            modifier = Modifier.size(size)
+            modifier = Modifier.size(size).semantics(mergeDescendants = true) {
+                this.contentDescription = contentDescription ?: text
+            }
         ) {
             Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                 /* 3. Gloss spot (top-left highlight) */
@@ -116,7 +120,7 @@ fun InteractiveBubble(
                 ) {
                     Icon(
                         imageVector = icon,
-                        contentDescription = contentDescription ?: text.ifBlank { null },
+                        contentDescription = null, // The clickable card owns the spoken label.
                         tint = onColor,
                         modifier = Modifier.size(iconSize)
                     )
