@@ -222,7 +222,10 @@ class EpubBookReader(
         val textColor = palette.onPrimaryContainer
 
         val chapterIndices = chunkedSpine[chunkIndex]
-        val combinedBodyContent = chapterIndices.joinToString("\n<hr class=\"chapter-break\">\n") { getChapterContent(it) }
+        val combinedBodyContent = chapterIndices.joinToString("\n<hr class=\"chapter-break\">\n") { spineIndex ->
+            // Spine indices survive CSS/font changes and regenerations of HTML.
+            """<section data-lumora-spine="$spineIndex">${getChapterContent(spineIndex)}</section>"""
+        }
         val fontSizeEm = 1.0f * fontSizeScale
 
         val bgHex = backgroundColor.toHex()
