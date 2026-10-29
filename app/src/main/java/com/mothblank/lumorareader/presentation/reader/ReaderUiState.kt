@@ -28,6 +28,8 @@ data class ReaderUiState(
     val quoteHighlightText: String? = null,
     val bookmarks: List<ReadingBookmark> = emptyList(),
     val bookQuotes: List<Quote> = emptyList(),
+    val bookForegroundMillis: Long = 0L,
+    val bookForegroundSessions: Int = 0,
     val epubFileUri: String? = null,
     val epubChunkCount: Int = 1,
     val currentChunkIndex: Int = 0,
