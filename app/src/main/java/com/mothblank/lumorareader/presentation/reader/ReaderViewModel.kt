@@ -73,7 +73,7 @@ class ReaderViewModel @Inject constructor(
         32L * 1024 * 1024,
         (Runtime.getRuntime().maxMemory() / 8).coerceAtLeast(8L * 1024 * 1024)
     )
-    data class PdfZoomTile(val pageIndex: Int, val region: RectF, val page: Page.PdfPage)
+    data class PdfZoomTile(val pageIndex: Int, val region: RectF, val zoom: Float, val page: Page.PdfPage)
     var pdfZoomTile by mutableStateOf<PdfZoomTile?>(null)
         private set
     private var pdfTileJob: Job? = null
@@ -365,7 +365,7 @@ class ReaderViewModel @Inject constructor(
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
         clearPdfCache()
-        invalidatePdfTile()
+        resetPdfPageZoom() // old pan offsets belong to the previous viewport
         loadPdfPage(uiState.value.currentPdfPage)
         loadPdfPage(uiState.value.currentPdfPage + 1)
     }
@@ -465,12 +465,17 @@ class ReaderViewModel @Inject constructor(
             (centerY + half + gutter).coerceIn(0f, 1f)
         )
         if (region.width() < 0.001f || region.height() < 0.001f) return
+        val visibleLeft = (centerX - half).coerceIn(0f, 1f)
+        val visibleRight = (centerX + half).coerceIn(0f, 1f)
+        val visibleTop = (centerY - half).coerceIn(0f, 1f)
+        val visibleBottom = (centerY + half).coerceIn(0f, 1f)
         val existing = pdfZoomTile
         if (existing != null && existing.pageIndex == pageIndex &&
-            existing.region.left <= centerX - half + 0.001f &&
-            existing.region.top <= centerY - half + 0.001f &&
-            existing.region.right >= centerX + half - 0.001f &&
-            existing.region.bottom >= centerY + half - 0.001f
+            existing.zoom >= zoom * 0.85f &&
+            existing.region.left <= visibleLeft + 0.001f &&
+            existing.region.top <= visibleTop + 0.001f &&
+            existing.region.right >= visibleRight - 0.001f &&
+            existing.region.bottom >= visibleBottom - 0.001f
         ) return
         val requestId = ++pdfTileRequestId
         val generation = readerGeneration
@@ -485,7 +490,7 @@ class ReaderViewModel @Inject constructor(
                     requestId == pdfTileRequestId && uiState.value.currentPdfPage == pageIndex &&
                     uiState.value.pdfPageZoomScale >= 1.45f
                 ) {
-                    pdfZoomTile = PdfZoomTile(pageIndex, RectF(region), tile)
+                    pdfZoomTile = PdfZoomTile(pageIndex, RectF(region), zoom, tile)
                     trimPdfCache()
                 }
             } catch (cancelled: CancellationException) {
