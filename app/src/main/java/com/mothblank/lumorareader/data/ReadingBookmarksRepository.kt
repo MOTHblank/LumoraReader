@@ -15,6 +15,12 @@ class ReadingBookmarksRepository @Inject constructor(
     fun observeBook(uri: String): Flow<List<ReadingBookmark>> =
         dao.observeBook(uri).map { list -> list.map { it.asModel() } }
 
+    fun searchAll(query: String): Flow<List<ReadingBookmark>> =
+        dao.searchAll(query).map { entries -> entries.map { it.asModel() } }
+
+    suspend fun getForBook(id: Long, uri: String): ReadingBookmark? =
+        dao.getForBook(id, uri)?.asModel()
+
     suspend fun add(bookmark: ReadingBookmark) {
         require(bookmark.bookUri.isNotBlank())
         require((bookmark.epubChunkIndex != null) != (bookmark.pdfPageIndex != null))
