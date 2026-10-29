@@ -200,7 +200,7 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun loadEpubChunk(chunkIndex: Int) {
+    private fun loadEpubChunk(chunkIndex: Int, themeOverride: LumoraTheme? = null, scaleOverride: Float? = null) {
         val epubReader = bookReader as? EpubBookReader ?: return
         if (chunkIndex !in 0 until epubReader.getChunkCount()) return
 
@@ -211,8 +211,8 @@ class ReaderViewModel @Inject constructor(
             _uiState.update { it.copy(isLoading = true, epubFileUri = null) }
             try {
                 val currentState = uiState.value
-                val currentTheme = currentState.theme
-                val currentFontSizeScale = currentState.fontSizeScale
+                val currentTheme = themeOverride ?: currentState.theme
+                val currentFontSizeScale = scaleOverride ?: currentState.fontSizeScale
                 val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale"
                 val cachedChunk = chunkFileCache[cacheKey] ?: withContext(Dispatchers.IO) {
                     val file = epubReader.generateScrollableHtmlFile(
@@ -404,7 +404,7 @@ class ReaderViewModel @Inject constructor(
             userPreferencesRepository.setTheme(theme)
             // The flow in 'init' will trigger a state update. We just need to reload the chunk.
             if (uiState.value.isEpub) {
-                loadEpubChunk(uiState.value.currentChunkIndex)
+                loadEpubChunk(uiState.value.currentChunkIndex, themeOverride = theme)
             }
         }
     }
@@ -413,7 +413,7 @@ class ReaderViewModel @Inject constructor(
         viewModelScope.launch {
             userPreferencesRepository.setFontSizeScale(scale)
             if (uiState.value.isEpub) {
-                loadEpubChunk(uiState.value.currentChunkIndex)
+                loadEpubChunk(uiState.value.currentChunkIndex, scaleOverride = scale)
             }
         }
     }
