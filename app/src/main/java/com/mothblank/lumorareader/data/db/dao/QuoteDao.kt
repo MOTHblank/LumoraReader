@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Query
 import androidx.room.Upsert
 import com.mothblank.lumorareader.data.model.QuoteEntity
+import com.mothblank.lumorareader.domain.model.QuoteBookOption
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -30,13 +31,17 @@ interface QuoteDao {
             (:query = '' OR text LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%' OR bookTitle LIKE '%' || :query || '%' OR note LIKE '%' || :query || '%' OR categories LIKE '%' || :query || '%')
             AND (:theme IS NULL OR theme = :theme)
             AND (:starred IS NULL OR starred = :starred)
+            AND (:sourceUri IS NULL OR sourceUri = :sourceUri)
         ORDER BY
             CASE WHEN :sortBy = 'DATE_DESC' THEN date END DESC,
             CASE WHEN :sortBy = 'DATE_ASC' THEN date END ASC,
             CASE WHEN :sortBy = 'AUTHOR' THEN author END ASC,
             CASE WHEN :sortBy = 'TEXT_LENGTH' THEN LENGTH(text) END DESC
     """)
-    fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String): Flow<List<QuoteEntity>>
+    fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String, sourceUri: String?): Flow<List<QuoteEntity>>
+
+    @Query("SELECT sourceUri, MAX(COALESCE(bookTitle, 'Untitled')) AS bookTitle FROM quotes WHERE sourceUri IS NOT NULL GROUP BY sourceUri ORDER BY bookTitle")
+    fun observeBookSources(): Flow<List<QuoteBookOption>>
 
     /**
      * Fetches a single quote by its primary key (id).
