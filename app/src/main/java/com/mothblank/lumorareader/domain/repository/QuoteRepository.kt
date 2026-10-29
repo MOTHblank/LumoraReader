@@ -20,6 +20,7 @@ interface QuoteRepository {
      */
     fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String, sourceUri: String? = null): Flow<List<Quote>>
     fun observeBookSources(): Flow<List<QuoteBookOption>>
+    fun observeAvailableThemes(): Flow<List<String>>
     /** Quotes with a verified document URI; legacy unlinked quotes stay in the library. */
     fun observeForBook(uri: String): Flow<List<Quote>>
 
