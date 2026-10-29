@@ -18,6 +18,9 @@ interface QuoteRepository {
      * @return A Flow that emits the list of matching quotes.
      */
     fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String): Flow<List<Quote>>
+    /** Quotes with a verified document URI; legacy unlinked quotes stay in the library. */
+    fun observeForBook(uri: String): Flow<List<Quote>>
+
     /**
      * Saves a new quote or updates an existing one.
      */
