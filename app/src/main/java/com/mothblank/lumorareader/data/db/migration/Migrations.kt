@@ -83,3 +83,22 @@ val MIGRATION_5_6 = object : Migration(5, 6) {
         db.execSQL("ALTER TABLE quotes ADD COLUMN note TEXT")
     }
 }
+
+/** Add bookmarks without altering or resetting any existing quote or reading position. */
+val MIGRATION_6_7 = object : Migration(6, 7) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS reading_bookmarks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                bookUri TEXT NOT NULL,
+                label TEXT NOT NULL,
+                note TEXT,
+                epubChunkIndex INTEGER,
+                epubAnchor TEXT,
+                pdfPageIndex INTEGER,
+                createdAt INTEGER NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_bookmarks_bookUri ON reading_bookmarks (bookUri)")
+    }
+}
