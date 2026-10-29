@@ -20,6 +20,9 @@ class QuoteRepositoryImpl @Inject constructor(
         }
     }
 
+    override fun observeForBook(uri: String): Flow<List<Quote>> =
+        dao.observeForBook(uri).map { entries -> entries.map { it.toDomainModel() } }
+
     override suspend fun getQuoteById(id: Int): Quote? {
         return dao.getQuoteById(id)?.toDomainModel()
     }
