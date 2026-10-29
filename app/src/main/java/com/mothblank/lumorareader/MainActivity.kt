@@ -88,7 +88,14 @@ class MainActivity : AppCompatActivity() {
                         startDestination = "home"
                     ) {
                         composable("home") { BubbleHomeScreen(navController) }
-                        composable("quotes") { QuotesScreen(navController) }
+                        composable(
+                            route = "quotes?search={search}",
+                            arguments = listOf(
+                                navArgument("search") { type = NavType.StringType; defaultValue = "" }
+                            )
+                        ) { entry ->
+                            QuotesScreen(navController, initialSearch = entry.arguments?.getString("search").orEmpty())
+                        }
                         composable("theme") { ThemeScreen(navController) }
                         composable("language") { LanguageScreen(navController) }
                         composable("books") { BooksScreen(navController) }
