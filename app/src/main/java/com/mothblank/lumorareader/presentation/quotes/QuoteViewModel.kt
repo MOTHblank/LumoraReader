@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.mothblank.lumorareader.domain.model.Quote
+import com.mothblank.lumorareader.domain.model.QuoteBookOption
 import com.mothblank.lumorareader.domain.repository.QuoteRepository
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -40,11 +41,25 @@ class QuoteViewModel @Inject constructor(
                 query = options.searchQuery,
                 theme = options.filterTheme,
                 starred = if (options.filterStarred) true else null,
-                sortBy = options.sortBy.name
+                sortBy = options.sortBy.name,
+                sourceUri = options.filterBookUri
             )
         }
 
     init {
+        viewModelScope.launch {
+            repository.observeBookSources().collect { books ->
+                _uiState.update { state ->
+                    state.copy(
+                        bookSources = books,
+                        filterOptions = if (state.filterOptions.filterBookUri != null &&
+                            books.none { it.sourceUri == state.filterOptions.filterBookUri }
+                        ) state.filterOptions.copy(filterBookUri = null)
+                        else state.filterOptions
+                    )
+                }
+            }
+        }
         // Start collecting the quotes flow as soon as the ViewModel is created.
         // The collected quotes are used to update our main UI state.
         viewModelScope.launch {
@@ -57,6 +72,12 @@ class QuoteViewModel @Inject constructor(
     // --- 3. PUBLIC FUNCTIONS to handle UI events ---
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(filterOptions = it.filterOptions.copy(searchQuery = query)) }
+    }
+
+    fun onBookSourceChange(uri: String?) {
+        _uiState.update {
+            it.copy(filterOptions = it.filterOptions.copy(filterBookUri = uri))
+        }
     }
 
     fun onSortByChange(sortBy: SortBy) {
@@ -242,6 +263,7 @@ class QuoteViewModel @Inject constructor(
 // --- 5. STATE DEFINITION CLASSES ---
 data class QuotesUiState(
     val quotes: List<Quote> = emptyList(),
+    val bookSources: List<QuoteBookOption> = emptyList(),
     val filterOptions: QuoteFilterOptions = QuoteFilterOptions(),
     val isLoading: Boolean = false,
     val error: String? = null
@@ -251,7 +273,8 @@ data class QuoteFilterOptions(
     val searchQuery: String = "",
     val sortBy: SortBy = SortBy.DATE_DESC,
     val filterTheme: String? = null,
-    val filterStarred: Boolean = false
+    val filterStarred: Boolean = false,
+    val filterBookUri: String? = null
 )
 
 enum class SortBy {
