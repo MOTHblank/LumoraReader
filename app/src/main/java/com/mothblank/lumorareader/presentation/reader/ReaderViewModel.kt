@@ -36,6 +36,7 @@ import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
@@ -98,6 +99,7 @@ class ReaderViewModel @Inject constructor(
     private var currentBookUri: String? = null
     private var bookmarkObserveJob: Job? = null
     private var quoteObserveJob: Job? = null
+    private var activityObserveJob: Job? = null
     private var originalOrientation: Int? = null
     private var foregroundStartedElapsed: Long? = null
     private var foregroundStartedWall: Long = 0L
@@ -170,7 +172,28 @@ class ReaderViewModel @Inject constructor(
     private fun observeBookNotebook(bookUri: String) {
         bookmarkObserveJob?.cancel()
         quoteObserveJob?.cancel()
-        _uiState.update { it.copy(bookmarks = emptyList(), bookQuotes = emptyList()) }
+        activityObserveJob?.cancel()
+        _uiState.update {
+            it.copy(
+                bookmarks = emptyList(),
+                bookQuotes = emptyList(),
+                bookForegroundMillis = 0L,
+                bookForegroundSessions = 0
+            )
+        }
+        val since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
+        activityObserveJob = viewModelScope.launch {
+            readingActivityRepository.observeBookTotals(bookUri, since).collect { total ->
+                if (currentBookUri == bookUri) {
+                    _uiState.update {
+                        it.copy(
+                            bookForegroundMillis = total.totalMillis,
+                            bookForegroundSessions = total.sessions
+                        )
+                    }
+                }
+            }
+        }
         bookmarkObserveJob = viewModelScope.launch {
             bookmarksRepository.observeBook(bookUri).collect { bookmarks ->
                 if (currentBookUri == bookUri) {
@@ -283,7 +306,7 @@ class ReaderViewModel @Inject constructor(
         val wall = foregroundStartedWall
         foregroundStartedElapsed = null
         foregroundBookUri = null
-        viewModelScope.launch(Dispatchers.IO) {
+        viewModelScope.launch(Dispatchers.IO + NonCancellable) {
             try {
                 readingActivityRepository.recordForegroundSession(uri, wall, duration)
             } catch (error: Exception) {
@@ -1054,6 +1077,7 @@ class ReaderViewModel @Inject constructor(
         onReaderBackground()
         bookmarkObserveJob?.cancel()
         quoteObserveJob?.cancel()
+        activityObserveJob?.cancel()
         bookOpenJob?.cancel()
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
