@@ -15,10 +15,13 @@ import com.mothblank.lumorareader.data.db.migration.MIGRATION_4_5
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_5_6
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_6_7
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_7_8
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_8_9
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
 import com.mothblank.lumorareader.data.db.entity.RecentBookEntity
 import com.mothblank.lumorareader.data.db.entity.ReadingBookmarkEntity
 import com.mothblank.lumorareader.data.db.dao.ReadingBookmarkDao
+import com.mothblank.lumorareader.data.db.dao.ReadingSessionDao
+import com.mothblank.lumorareader.data.db.entity.ReadingSessionEntity
 import com.mothblank.lumorareader.data.model.QuoteEntity
 import com.mothblank.lumorareader.data.model.StringListConverter
 
@@ -27,8 +30,9 @@ import com.mothblank.lumorareader.data.model.StringListConverter
         QuoteEntity::class,
         RecentBookEntity::class,
         ReadingBookmarkEntity::class,
+        ReadingSessionEntity::class,
     ],
-    version = 8,
+    version = 9,
     exportSchema = false
 )
 @TypeConverters(DateTimeConverter::class, StringListConverter::class)
@@ -36,6 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun quoteDao(): QuoteDao
     abstract fun recentBookDao(): RecentBookDao
     abstract fun readingBookmarkDao(): ReadingBookmarkDao
+    abstract fun readingSessionDao(): ReadingSessionDao
 
     companion object {
         @Volatile
@@ -48,7 +53,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "lumora_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9)
                 .build()
                 INSTANCE = instance
                 instance
