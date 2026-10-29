@@ -24,6 +24,15 @@ interface RecentBookDao {
     @Query("UPDATE reading_history SET positionIndex = :index, scrollOffset = :offset, progress = :progress, epubAnchor = :anchor WHERE uri = :uri")
     suspend fun updateReadingPosition(uri: String, index: Int, offset: Int, progress: Float, anchor: String?)
 
+    @Query("UPDATE reading_history SET isFavorite = :favorite WHERE uri = :uri")
+    suspend fun setFavorite(uri: String, favorite: Boolean)
+
+    @Query("UPDATE reading_history SET readingStatus = :status WHERE uri = :uri")
+    suspend fun setReadingStatus(uri: String, status: String)
+
+    @Query("UPDATE reading_history SET collectionName = :collection WHERE uri = :uri")
+    suspend fun setCollection(uri: String, collection: String?)
+
     @Query("UPDATE reading_history SET isAvailable = :available WHERE uri = :uri")
     suspend fun updateAvailability(uri: String, available: Boolean)
 
