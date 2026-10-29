@@ -193,7 +193,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     ) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Reader settings and navigation"
+                            contentDescription = stringResource(R.string.reader_settings_navigation)
                         )
                     }
                 }
@@ -232,11 +232,18 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             .fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
                             .semantics(mergeDescendants = true) {
                                 contentDescription = if (uiState.isEpub) {
-                                    "${uiState.currentChapterTitle ?: "Section ${uiState.currentChunkIndex + 1}"}, " +
-                                        "${(uiState.readingProgress * 100).roundToInt()} percent read"
+                                    context.getString(
+                                        R.string.reader_progress_epub,
+                                        uiState.currentChapterTitle ?: "Section ${uiState.currentChunkIndex + 1}",
+                                        (uiState.readingProgress * 100).roundToInt()
+                                    )
                                 } else {
-                                    "Page ${uiState.currentPdfPage + 1} of ${uiState.pdfPageCount}, " +
-                                        "${(uiState.readingProgress * 100).roundToInt()} percent read"
+                                    context.getString(
+                                        R.string.reader_progress_pdf,
+                                        uiState.currentPdfPage + 1,
+                                        uiState.pdfPageCount,
+                                        (uiState.readingProgress * 100).roundToInt()
+                                    )
                                 }
                             },
                         shape = RoundedCornerShape(12.dp),
@@ -353,7 +360,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 size = 72.dp,
                                 text = "",                        // icon-only mode
                                 icon = Icons.Default.Close,
-                                contentDescription = "Clear text selection",
+                                contentDescription = stringResource(R.string.reader_clear_text_selection),
                                 color = MaterialTheme.colorScheme.error,
                                 isSelected = false,
                                 onClick = { viewModel.clearTextSelection() }
@@ -364,7 +371,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 size = 72.dp,
                                 text = "",                        // icon-only mode
                                 icon = Icons.Default.FormatQuote,
-                                contentDescription = "Save selected text as quotation",
+                                contentDescription = stringResource(R.string.reader_save_selected_quote),
                                 color = MaterialTheme.colorScheme.primary,
                                 isSelected = true,               // keeps the glow
                                 onClick = { viewModel.saveSelectedQuote() }
