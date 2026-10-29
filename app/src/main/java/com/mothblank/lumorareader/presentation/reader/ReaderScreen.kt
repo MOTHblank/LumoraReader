@@ -12,14 +12,17 @@ import android.webkit.WebViewClient
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.ScrollableDefaults
 import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -88,15 +91,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.pointer.awaitFirstDown
+import androidx.compose.ui.input.pointer.calculateCentroid
+import androidx.compose.ui.input.pointer.calculatePan
+import androidx.compose.ui.input.pointer.calculateZoom
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -106,6 +117,7 @@ import com.mothblank.lumorareader.domain.model.Page
 import com.mothblank.lumorareader.presentation.home.components.InteractiveBubble
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import com.mothblank.lumorareader.ui.theme.representativeColor
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -1113,89 +1125,72 @@ enum class InputLockState {
 @Composable
 fun PdfScrollReader(viewModel: ReaderViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
-    val configuration = LocalConfiguration.current
-    val screenWidth = configuration.screenWidthDp.dp
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = uiState.currentPdfPage)
 
-    // Track current visible page more reliably
     val currentVisiblePage by remember {
         derivedStateOf {
             val firstVisible = listState.firstVisibleItemIndex
-            val firstVisibleOffset = listState.firstVisibleItemScrollOffset
-
-            // If we've scrolled past 50% of the current item, consider next item as current
-            if (firstVisibleOffset > 500) { // Adjust threshold as needed
-                minOf(firstVisible + 1, uiState.pdfPageCount - 1)
-            } else {
-                firstVisible
-            }
+            val firstSize = listState.layoutInfo.visibleItemsInfo.firstOrNull()?.size ?: 0
+            val next = if (firstSize > 0 &&
+                listState.firstVisibleItemScrollOffset > firstSize / 2
+            ) firstVisible + 1 else firstVisible
+            next.coerceIn(0, (uiState.pdfPageCount - 1).coerceAtLeast(0))
         }
     }
 
-    // Preload pages strategy - load current + adjacent pages
-    LaunchedEffect(currentVisiblePage) {
-        val pagesToLoad = mutableSetOf<Int>()
-
-        // Always load current page and adjacent pages
-        for (i in (currentVisiblePage - 2)..(currentVisiblePage + 3)) {
-            if (i in 0 until uiState.pdfPageCount) {
-                pagesToLoad.add(i)
-            }
-        }
-
-        // Load pages that aren't already cached
-        pagesToLoad.forEach { pageIndex ->
-            if (viewModel.pageCache[pageIndex] == null) {
-                viewModel.loadPdfPage(pageIndex)
-            }
-        }
-    }
-
-    // Update current page in viewModel when visible page changes
     LaunchedEffect(currentVisiblePage) {
         if (currentVisiblePage != uiState.currentPdfPage) {
             viewModel.onPdfPageChanged(currentVisiblePage)
         }
+        for (page in (currentVisiblePage - 1)..(currentVisiblePage + 2)) {
+            viewModel.loadPdfPage(page)
+        }
     }
 
-    // Smooth scroll to page when programmatically changed (from navigation)
     LaunchedEffect(uiState.currentPdfPage) {
         if (uiState.currentPdfPage != currentVisiblePage &&
-            listState.layoutInfo.totalItemsCount > uiState.currentPdfPage) {
+            listState.layoutInfo.totalItemsCount > uiState.currentPdfPage
+        ) {
             listState.animateScrollToItem(uiState.currentPdfPage)
         }
     }
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxSize()
             .pointerInput(Unit) {
-                // Handle tap-to-menu like EPUB reader
-                detectTapGestures(
-                    onTap = { viewModel.onToggleMenuVisibility() }
-                )
+                detectTapGestures(onTap = { viewModel.onToggleMenuVisibility() })
             }
     ) {
+        val screenWidth = maxWidth
+        val widthPx = with(LocalDensity.current) { maxWidth.roundToPx() }
+        LaunchedEffect(widthPx) { viewModel.onPdfViewportWidthChanged(widthPx) }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.surfaceVariant),
             state = listState,
-            userScrollEnabled = true, // Always allow scrolling
+            // One-finger page scrolling stays enabled when not zoomed.
+            userScrollEnabled = uiState.pdfPageZoomScale <= 1.01f,
             flingBehavior = ScrollableDefaults.flingBehavior(),
-            // Add spacing between pages
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(vertical = 8.dp)
         ) {
             items(
                 count = uiState.pdfPageCount,
-                key = { index -> "pdf_page_$index" } // More specific key
+                key = { index -> "pdf_page_$index" }
             ) { index ->
                 PdfPageItem(
                     pageIndex = index,
                     page = viewModel.pageCache[index],
+                    tile = if (uiState.currentPdfPage == index) viewModel.pdfZoomTile else null,
+                    isCurrentPage = uiState.currentPdfPage == index,
+                    zoom = if (uiState.currentPdfPage == index) uiState.pdfPageZoomScale else 1f,
+                    offsetX = if (uiState.currentPdfPage == index) uiState.pdfPageOffsetX else 0f,
+                    offsetY = if (uiState.currentPdfPage == index) uiState.pdfPageOffsetY else 0f,
                     screenWidth = screenWidth,
-                    onLoadPage = { viewModel.loadPdfPage(index) }
+                    viewModel = viewModel
                 )
             }
         }
@@ -1206,24 +1201,23 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
 fun PdfPageItem(
     pageIndex: Int,
     page: Page?,
+    tile: ReaderViewModel.PdfZoomTile?,
+    isCurrentPage: Boolean,
+    zoom: Float,
+    offsetX: Float,
+    offsetY: Float,
     screenWidth: Dp,
-    onLoadPage: () -> Unit
+    viewModel: ReaderViewModel
 ) {
-    // Load page if not cached
-    LaunchedEffect(pageIndex) {
-        if (page == null) {
-            onLoadPage()
-        }
+    // A page that was evicted from the byte-bounded LRU can load again when
+    // it becomes visible, without eagerly rendering the entire document.
+    LaunchedEffect(pageIndex, page) {
+        if (page == null) viewModel.loadPdfPage(pageIndex)
     }
 
     when (page) {
         is Page.PdfPage -> {
-            // Calculate exact dimensions to prevent horizontal scrolling
-            val imageWidth = page.image.width
-            val imageHeight = page.image.height
-            val aspectRatio = imageWidth.toFloat() / imageHeight.toFloat()
-
-            // Calculate height based on screen width to maintain aspect ratio
+            val aspectRatio = page.image.width.toFloat() / page.image.height
             val displayHeight = screenWidth / aspectRatio
 
             Card(
@@ -1233,27 +1227,92 @@ fun PdfPageItem(
                     .padding(horizontal = 4.dp),
                 elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
             ) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Image(
-                        bitmap = page.image.asImageBitmap(),
-                        contentDescription = "Page ${pageIndex + 1}",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Fit,
-                        alignment = Alignment.Center
-                    )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Canvas(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(pageIndex, isCurrentPage) {
+                                if (!isCurrentPage) return@pointerInput
+                                // Do not capture single-finger scrolls until
+                                // zoomed; two fingers begin zoom manipulation.
+                                awaitEachGesture {
+                                    awaitFirstDown(requireUnconsumed = false)
+                                    do {
+                                        val event = awaitPointerEvent()
+                                        val pointersDown = event.changes.count { it.pressed }
+                                        val state = viewModel.uiState.value
+                                        if (pointersDown >= 2 ||
+                                            (state.pdfPageZoomScale > 1.01f && pointersDown > 0)
+                                        ) {
+                                            val oldZoom = state.pdfPageZoomScale
+                                            val newZoom = (oldZoom * event.calculateZoom()).coerceIn(1f, 4f)
+                                            val factor = newZoom / oldZoom
+                                            val movement = event.calculatePan()
+                                            val centroid = event.calculateCentroid(useCurrent = false)
+                                            val centerX = size.width / 2f
+                                            val centerY = size.height / 2f
+                                            val nextX = state.pdfPageOffsetX * factor +
+                                                (centroid.x - centerX) * (1f - factor) + movement.x
+                                            val nextY = state.pdfPageOffsetY * factor +
+                                                (centroid.y - centerY) * (1f - factor) + movement.y
+                                            val maxX = size.width * (newZoom - 1f) / 2f
+                                            val maxY = size.height * (newZoom - 1f) / 2f
+                                            viewModel.onPdfPageZoomChange(
+                                                newZoom,
+                                                nextX.coerceIn(-maxX, maxX),
+                                                nextY.coerceIn(-maxY, maxY)
+                                            )
+                                            event.changes.forEach { it.consume() }
+                                        }
+                                    } while (event.changes.any { it.pressed })
+                                }
+                            }
+                    ) {
+                        val drawWidth = size.width.roundToInt().coerceAtLeast(1)
+                        val drawHeight = size.height.roundToInt().coerceAtLeast(1)
+                        withTransform({
+                            translate(offsetX, offsetY)
+                            scale(zoom, zoom, pivot = size.center)
+                        }) {
+                            drawImage(
+                                image = page.image.asImageBitmap(),
+                                dstSize = IntSize(drawWidth, drawHeight)
+                            )
+                            if (tile != null && tile.pageIndex == pageIndex && zoom > 1.01f) {
+                                drawImage(
+                                    image = tile.page.image.asImageBitmap(),
+                                    dstOffset = IntOffset(
+                                        (tile.region.left * drawWidth).roundToInt(),
+                                        (tile.region.top * drawHeight).roundToInt()
+                                    ),
+                                    dstSize = IntSize(
+                                        (tile.region.width() * drawWidth).roundToInt().coerceAtLeast(1),
+                                        (tile.region.height() * drawHeight).roundToInt().coerceAtLeast(1)
+                                    )
+                                )
+                            }
+                        }
+                    }
+                    if (isCurrentPage && zoom > 1.01f) {
+                        TextButton(
+                            onClick = { viewModel.resetPdfPageZoom() },
+                            modifier = Modifier.align(Alignment.TopEnd),
+                            colors = ButtonDefaults.textButtonColors(
+                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f)
+                            )
+                        ) {
+                            Text("Reset zoom · ${(zoom * 100).roundToInt()}%")
+                        }
+                    }
                 }
             }
         }
 
         else -> {
-            // Loading placeholder with better visual feedback
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(screenWidth * 1.414f) // Approximate A4 ratio height
+                    .height(screenWidth * 1.414f)
                     .padding(horizontal = 4.dp),
                 colors = CardDefaults.cardColors(
                     containerColor = MaterialTheme.colorScheme.surface
@@ -1284,6 +1343,7 @@ fun PdfPageItem(
         }
     }
 }
+
 @Composable
 fun SmartGestureOverlay(
     onToggleMenu: () -> Unit,
