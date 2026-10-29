@@ -105,6 +105,14 @@ fun BooksScreen(
                     )
                 }
             },
+            actions = {
+                IconButton(onClick = { navController.navigate("search") }) {
+                    Icon(
+                        Icons.Default.Search,
+                        contentDescription = stringResource(R.string.home_search)
+                    )
+                }
+            },
             colors = TopAppBarDefaults.centerAlignedTopAppBarColors(
                 containerColor = MaterialTheme.colorScheme.background
             )
