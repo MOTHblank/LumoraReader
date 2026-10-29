@@ -168,6 +168,11 @@ fun ScrollableReaderSettingsMenu(
     onThemeChange: (LumoraTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
     onFontFamilyChange: (String) -> Unit,
+    onLineSpacingChange: (Float) -> Unit,
+    onMarginChange: (String) -> Unit,
+    onPdfNightModeChange: (Boolean) -> Unit,
+    onPdfPageSpacingChange: (Int) -> Unit,
+    onEnterFocusMode: () -> Unit,
     onOrientationChange: (Int) -> Unit,
     onRefresh: () -> Unit,
     onShare: () -> Unit,
@@ -193,6 +198,26 @@ fun ScrollableReaderSettingsMenu(
                 style = MaterialTheme.typography.headlineSmall,
                 color = MaterialTheme.colorScheme.primary
             )
+        }
+
+        HorizontalDivider()
+
+        // A single explicit way into focus mode. The main reader keeps a
+        // separate accessible exit action rather than trapping keyboard users.
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text(
+                stringResource(R.string.reader_focus_mode),
+                style = MaterialTheme.typography.titleMedium
+            )
+            Text(
+                stringResource(R.string.reader_focus_mode_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            OutlinedButton(
+                onClick = onEnterFocusMode,
+                modifier = Modifier.fillMaxWidth()
+            ) { Text(stringResource(R.string.reader_enter_focus_mode)) }
         }
 
         HorizontalDivider()
@@ -277,7 +302,11 @@ fun ScrollableReaderSettingsMenu(
 
         HorizontalDivider()
 
-        // Font size section with enhanced UI
+        // Reading typography. Sliders commit on release to avoid generating
+        // a new EPUB WebView for every pointer movement.
+        var pendingFontSize by remember(uiState.fontSizeScale) {
+            mutableStateOf(uiState.fontSizeScale)
+        }
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -303,10 +332,13 @@ fun ScrollableReaderSettingsMenu(
                 )
             ) {
                 Text(
-                    text = "Sample text at ${String.format("%.0f", uiState.fontSizeScale * 100)}%",
+                    text = stringResource(
+                        R.string.reader_font_size_percentage,
+                        (pendingFontSize * 100).roundToInt()
+                    ),
                     modifier = Modifier.padding(if (isLandscape) 12.dp else 16.dp),
                     style = MaterialTheme.typography.bodyMedium.copy(
-                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * uiState.fontSizeScale
+                        fontSize = MaterialTheme.typography.bodyMedium.fontSize * pendingFontSize
                     ),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -333,8 +365,11 @@ fun ScrollableReaderSettingsMenu(
 
                 Slider(
                     modifier = Modifier.semantics { contentDescription = fontSizeDescription },
-                    value = uiState.fontSizeScale,
-                    onValueChange = onFontSizeChange,
+                    value = pendingFontSize,
+                    onValueChange = { pendingFontSize = it },
+                    onValueChangeFinished = {
+                        if (pendingFontSize != uiState.fontSizeScale) onFontSizeChange(pendingFontSize)
+                    },
                     valueRange = 0.8f..2.0f,
                     steps = 11,
                     colors = SliderDefaults.colors(
@@ -362,6 +397,97 @@ fun ScrollableReaderSettingsMenu(
                             ),
                             modifier = Modifier.weight(1f)
                         ) { Text(choice) }
+                    }
+                }
+            }
+            HorizontalDivider()
+        }
+
+        if (uiState.isEpub) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                var pendingLineSpacing by remember(uiState.epubLineSpacing) {
+                    mutableStateOf(uiState.epubLineSpacing)
+                }
+                Text(stringResource(R.string.reader_typography_section),
+                    style = MaterialTheme.typography.titleMedium)
+                val formattedSpacing = String.format(
+                    java.util.Locale.getDefault(), "%.1f", pendingLineSpacing
+                )
+                Text(
+                    stringResource(R.string.reader_line_height_value, formattedSpacing),
+                    style = MaterialTheme.typography.bodyMedium
+                )
+                val lineSpacingLabel = stringResource(R.string.reader_line_spacing)
+                Slider(
+                    value = pendingLineSpacing,
+                    onValueChange = { pendingLineSpacing = it },
+                    onValueChangeFinished = {
+                        if (pendingLineSpacing != uiState.epubLineSpacing) {
+                            onLineSpacingChange(pendingLineSpacing)
+                        }
+                    },
+                    valueRange = 1.4f..2.2f,
+                    steps = 7,
+                    modifier = Modifier.semantics {
+                        contentDescription = lineSpacingLabel
+                    }
+                )
+                Text(stringResource(R.string.reader_margin_setting),
+                    style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    listOf("Compact", "Comfortable", "Wide").forEach { option ->
+                        val label = stringResource(
+                            when (option) {
+                                "Compact" -> R.string.reader_margin_compact
+                                "Wide" -> R.string.reader_margin_wide
+                                else -> R.string.reader_margin_comfortable
+                            }
+                        )
+                        OutlinedButton(
+                            onClick = { onMarginChange(option) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (uiState.epubMargin == option)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                            )
+                        ) { Text(label, maxLines = 1) }
+                    }
+                }
+            }
+            HorizontalDivider()
+        } else if (uiState.isPdf) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(stringResource(R.string.reader_pdf_display),
+                    style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(stringResource(R.string.reader_pdf_night_mode),
+                            style = MaterialTheme.typography.bodyMedium)
+                        Text(stringResource(R.string.reader_pdf_night_mode_hint),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    androidx.compose.material3.Switch(
+                        checked = uiState.pdfNightMode,
+                        onCheckedChange = onPdfNightModeChange
+                    )
+                }
+                Text(stringResource(R.string.reader_pdf_spacing),
+                    style = MaterialTheme.typography.titleSmall)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf(8 to R.string.reader_pdf_spacing_compact,
+                        24 to R.string.reader_pdf_spacing_comfortable).forEach { (spacing, labelId) ->
+                        OutlinedButton(
+                            onClick = { onPdfPageSpacingChange(spacing) },
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.outlinedButtonColors(
+                                containerColor = if (uiState.pdfPageSpacingDp == spacing)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surface
+                            )
+                        ) { Text(stringResource(labelId), maxLines = 1) }
                     }
                 }
             }
