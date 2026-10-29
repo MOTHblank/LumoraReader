@@ -40,6 +40,9 @@ interface QuoteDao {
     """)
     fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String, sourceUri: String?): Flow<List<QuoteEntity>>
 
+    @Query("SELECT DISTINCT theme FROM quotes WHERE theme IS NOT NULL AND theme != '' ORDER BY theme")
+    fun observeAvailableThemes(): Flow<List<String>>
+
     @Query("SELECT sourceUri, MAX(COALESCE(bookTitle, 'Untitled')) AS bookTitle FROM quotes WHERE sourceUri IS NOT NULL GROUP BY sourceUri ORDER BY bookTitle")
     fun observeBookSources(): Flow<List<QuoteBookOption>>
 
