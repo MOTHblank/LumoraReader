@@ -1,6 +1,7 @@
 package com.mothblank.lumorareader.domain.repository
 
 import com.mothblank.lumorareader.domain.model.Quote
+import com.mothblank.lumorareader.domain.model.QuoteBookOption
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -17,7 +18,8 @@ interface QuoteRepository {
      * @param sortBy A string representation of the sorting method (e.g., "DATE_DESC").
      * @return A Flow that emits the list of matching quotes.
      */
-    fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String): Flow<List<Quote>>
+    fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String, sourceUri: String? = null): Flow<List<Quote>>
+    fun observeBookSources(): Flow<List<QuoteBookOption>>
     /** Quotes with a verified document URI; legacy unlinked quotes stay in the library. */
     fun observeForBook(uri: String): Flow<List<Quote>>
 
