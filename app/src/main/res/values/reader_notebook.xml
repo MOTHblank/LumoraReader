@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_notebook_title">Reading notebook</string>
+    <string name="reader_notebook_untitled">Untitled book</string>
+    <string name="reader_notebook_page">Page %1$d</string>
+    <string name="reader_notebook_section">Section %1$d</string>
+    <string name="reader_notebook_progress">%1$d%% read</string>
+    <string name="reader_notebook_add">Bookmark current location</string>
+    <string name="reader_notebook_bookmarks">Bookmarks (%1$d)</string>
+    <string name="reader_notebook_no_bookmarks">No bookmarks saved for this book.</string>
+    <string name="reader_notebook_jump">Jump to passage</string>
+    <string name="reader_notebook_edit">Edit</string>
+    <string name="reader_notebook_delete">Delete</string>
+    <string name="reader_notebook_quotes">Quotations (%1$d)</string>
+    <string name="reader_notebook_no_quotes">No source-linked quotations for this book.</string>
+    <string name="reader_notebook_quotes_limit">Showing the 30 most recent quotations.</string>
+    <string name="reader_notebook_close">Close</string>
+    <string name="reader_notebook_annotation">Bookmark annotation</string>
+    <string name="reader_notebook_label">Bookmark label</string>
+    <string name="reader_notebook_note">Personal note (optional)</string>
+    <string name="reader_notebook_save">Save</string>
+    <string name="reader_notebook_cancel">Cancel</string>
+    <string name="reader_notebook_open">Open reading notebook</string>
+</resources>
