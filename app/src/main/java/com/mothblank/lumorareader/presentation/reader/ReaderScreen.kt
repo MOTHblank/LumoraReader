@@ -9,6 +9,7 @@ import android.graphics.Bitmap
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import org.json.JSONObject
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -61,6 +62,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.FilledTonalIconButton
@@ -125,6 +128,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     var showBookInfo by remember { mutableStateOf(false) }
+    var showContents by remember { mutableStateOf(false) }
     val shareBook: () -> Unit = {
         val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
         val author = uiState.bookAuthor?.takeIf { it.isNotBlank() }
@@ -371,6 +375,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             uiState = uiState,
                             onThemeChange = { viewModel.onThemeChange(it) },
                             onFontSizeChange = { viewModel.onFontSizeChange(it) },
+                            onFontFamilyChange = { viewModel.onFontFamilyChange(it) },
                             onOrientationChange = { viewModel.onOrientationChange(it) },
                             onRefresh = { viewModel.retryLoading() },
                             onShare = shareBook,
@@ -414,6 +419,7 @@ fun ScrollableReaderSettingsMenu(
     uiState: ReaderUiState,
     onThemeChange: (LumoraTheme) -> Unit,
     onFontSizeChange: (Float) -> Unit,
+    onFontFamilyChange: (String) -> Unit,
     onOrientationChange: (Int) -> Unit,
     onRefresh: () -> Unit,
     onShare: () -> Unit,
@@ -588,6 +594,26 @@ fun ScrollableReaderSettingsMenu(
         }
 
         HorizontalDivider()
+
+        if (uiState.isEpub) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text("Reading font", style = MaterialTheme.typography.titleMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    listOf("Georgia", "Sans", "Mono").forEach { choice ->
+                        FilledTonalButton(
+                            onClick = { onFontFamilyChange(choice) },
+                            colors = ButtonDefaults.filledTonalButtonColors(
+                                containerColor = if (uiState.fontFamily == choice)
+                                    MaterialTheme.colorScheme.primaryContainer
+                                else MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            modifier = Modifier.weight(1f)
+                        ) { Text(choice) }
+                    }
+                }
+            }
+            HorizontalDivider()
+        }
 
         // Additional settings with interactive bubbles - more compact in landscape
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
