@@ -68,3 +68,36 @@ access through WebView settings.
 
 Android build and on-device accessibility behavior require subsequent
 verification; source-level review alone cannot establish those results.
+
+
+## Phase 6: reading presentation preferences
+
+Reader appearance is split into two layers:
+
+- Persistent presentation settings live in `UserPreferencesRepository` (DataStore).
+  EPUB line spacing is bounded to 1.4–2.2, margins are a whitelist of
+  Compact/Comfortable/Wide, PDF night colors are a boolean, and PDF page
+  spacing allows 8 or 24 dp. Existing font and theme settings are unchanged.
+- `ReaderUiState.focusMode` is session-only and deliberately not persisted.
+  It hides normal overlays without disabling text selection or document access.
+  Users exit with a page tap, the Back action, or an accessible exit control.
+
+EPUB layout changes regenerate only the currently requested HTML chunk. The
+cache key includes line spacing and margin settings, preserving the cached
+versions of other presentations for nearby navigation. The existing
+spine-relative anchor remains the source of truth for restoring a location
+after reflow. Font-size and line-spacing sliders commit only after dragging
+finishes to avoid rapid repeated WebView recreation.
+
+PDF night rendering is a draw-time inversion color filter applied to both
+normal pages and zoom tiles. The `PdfRenderer` configuration, native page
+geometry, and cached bitmap bytes do not change. This treatment also inverts
+photographs and illustrations; it is a display preference rather than a
+photographic color-preservation feature.
+
+Both customization resource files have English and PT-BR strings, with default
+resource fallback for other locales.
+
+The main reader surfaces call `onReaderSurfaceTapped()` rather than toggling
+settings directly, so an existing focus session always exits cleanly before
+a settings sheet can open.
