@@ -1,5 +1,7 @@
 package com.mothblank.lumorareader.domain.model
 
+data class QuoteBookOption(val sourceUri: String, val bookTitle: String)
+
 data class Quote(
     val id: Int = 0,
     val text: String,
