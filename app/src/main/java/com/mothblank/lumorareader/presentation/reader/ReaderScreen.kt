@@ -106,6 +106,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -207,7 +209,16 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                 ) {
                     Surface(
                         modifier = Modifier.align(Alignment.BottomCenter)
-                            .fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                            .fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp)
+                            .semantics(mergeDescendants = true) {
+                                contentDescription = if (uiState.isEpub) {
+                                    "${uiState.currentChapterTitle ?: "Section ${uiState.currentChunkIndex + 1}"}, " +
+                                        "${(uiState.readingProgress * 100).roundToInt()} percent read"
+                                } else {
+                                    "Page ${uiState.currentPdfPage + 1} of ${uiState.pdfPageCount}, " +
+                                        "${(uiState.readingProgress * 100).roundToInt()} percent read"
+                                }
+                            },
                         shape = RoundedCornerShape(12.dp),
                         color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
                         tonalElevation = 2.dp
@@ -322,6 +333,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 size = 72.dp,
                                 text = "",                        // icon-only mode
                                 icon = Icons.Default.Close,
+                                contentDescription = "Clear text selection",
                                 color = MaterialTheme.colorScheme.error,
                                 isSelected = false,
                                 onClick = { viewModel.clearTextSelection() }
@@ -332,6 +344,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 size = 72.dp,
                                 text = "",                        // icon-only mode
                                 icon = Icons.Default.FormatQuote,
+                                contentDescription = "Save selected text as quotation",
                                 color = MaterialTheme.colorScheme.primary,
                                 isSelected = true,               // keeps the glow
                                 onClick = { viewModel.saveSelectedQuote() }
