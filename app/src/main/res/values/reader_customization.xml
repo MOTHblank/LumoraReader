@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_focus_mode">Distraction-free reading</string>
+    <string name="reader_focus_mode_hint">Hide controls until you tap the page or exit focus mode.</string>
+    <string name="reader_enter_focus_mode">Enter focus mode</string>
+    <string name="reader_exit_focus_mode">Exit focus</string>
+    <string name="reader_typography_section">Typography</string>
+    <string name="reader_line_spacing">Line spacing</string>
+    <string name="reader_margin_setting">Page margins</string>
+    <string name="reader_margin_compact">Compact</string>
+    <string name="reader_margin_comfortable">Comfortable</string>
+    <string name="reader_margin_wide">Wide</string>
+    <string name="reader_pdf_display">PDF display</string>
+    <string name="reader_pdf_night_mode">Night colors</string>
+    <string name="reader_pdf_night_mode_hint">Invert page colors for comfortable reading in the dark.</string>
+    <string name="reader_pdf_spacing">Space between pages</string>
+    <string name="reader_pdf_spacing_compact">Compact</string>
+    <string name="reader_pdf_spacing_comfortable">Comfortable</string>
+    <string name="reader_font_size_percentage">Text size: %1$d%%</string>
+    <string name="reader_line_height_value">Line spacing: %1$s</string>
+</resources>
