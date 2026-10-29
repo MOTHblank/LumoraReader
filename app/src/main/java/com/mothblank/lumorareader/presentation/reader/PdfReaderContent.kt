@@ -45,6 +45,8 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FormatQuote
@@ -104,6 +106,8 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -174,6 +178,7 @@ fun PdfPageNavigationBar(
                     containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 ),
                 modifier = Modifier.clickable { showPageDialog = true }
+                    .semantics { contentDescription = "Go to page, currently $currentPage of $totalPages" }
             ) {
                 Text(
                     text = "Page $currentPage of $totalPages",
@@ -378,6 +383,9 @@ fun PdfPageItem(
                     Canvas(
                         modifier = Modifier
                             .fillMaxSize()
+                            .semantics {
+                                contentDescription = "PDF page ${pageIndex + 1}"
+                            }
                             .pointerInput(pageIndex, isCurrentPage) {
                                 if (!isCurrentPage) return@pointerInput
                                 // Do not capture single-finger scrolls until
@@ -440,15 +448,43 @@ fun PdfPageItem(
                             }
                         }
                     }
-                    if (isCurrentPage && zoom > 1.01f) {
-                        TextButton(
-                            onClick = { viewModel.resetPdfPageZoom() },
-                            modifier = Modifier.align(Alignment.TopEnd),
-                            colors = ButtonDefaults.textButtonColors(
-                                containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f)
-                            )
+                    // Keyboard and screen-reader accessible alternative to pinch gestures.
+                    if (isCurrentPage) {
+                        Row(
+                            modifier = Modifier.align(Alignment.TopEnd).padding(4.dp),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.CenterVertically
                         ) {
-                            Text("Reset zoom · ${(zoom * 100).roundToInt()}%")
+                            FilledTonalIconButton(
+                                onClick = {
+                                    viewModel.onPdfPageZoomChange(
+                                        (zoom - 0.5f).coerceAtLeast(1f), offsetX, offsetY
+                                    )
+                                },
+                                enabled = zoom > 1.01f,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(Icons.Default.Remove, contentDescription = "Zoom out PDF")
+                            }
+                            if (zoom > 1.01f) {
+                                TextButton(
+                                    onClick = { viewModel.resetPdfPageZoom() },
+                                    colors = ButtonDefaults.textButtonColors(
+                                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.93f)
+                                    )
+                                ) { Text("Reset ${(zoom * 100).roundToInt()}%") }
+                            }
+                            FilledTonalIconButton(
+                                onClick = {
+                                    viewModel.onPdfPageZoomChange(
+                                        (zoom + 0.5f).coerceAtMost(4f), offsetX, offsetY
+                                    )
+                                },
+                                enabled = zoom < 3.99f,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(Icons.Default.Add, contentDescription = "Zoom in PDF")
+                            }
                         }
                     }
                 }
