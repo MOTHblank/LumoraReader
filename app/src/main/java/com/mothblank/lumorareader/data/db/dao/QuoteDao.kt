@@ -46,6 +46,10 @@ interface QuoteDao {
     @Query("SELECT * FROM quotes WHERE id = :id LIMIT 1")
     suspend fun getQuoteById(id: Int): QuoteEntity?
 
+    /** Book-specific excerpts for the reading notebook; bound by URI, never title. */
+    @Query("SELECT * FROM quotes WHERE sourceUri = :uri ORDER BY date DESC, id DESC")
+    fun observeForBook(uri: String): Flow<List<QuoteEntity>>
+
     /**
      * Inserts a new quote or updates an existing one if the primary key already exists.
      * The @Upsert annotation handles the insert-or-update logic automatically.
