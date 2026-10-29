@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_focus_mode">Leitura sem distrações</string>
+    <string name="reader_focus_mode_hint">Oculte os controles até tocar na página ou sair do modo foco.</string>
+    <string name="reader_enter_focus_mode">Entrar no modo foco</string>
+    <string name="reader_exit_focus_mode">Sair do foco</string>
+    <string name="reader_typography_section">Tipografia</string>
+    <string name="reader_line_spacing">Espaçamento entre linhas</string>
+    <string name="reader_margin_setting">Margens da página</string>
+    <string name="reader_margin_compact">Compactas</string>
+    <string name="reader_margin_comfortable">Confortáveis</string>
+    <string name="reader_margin_wide">Largas</string>
+    <string name="reader_pdf_display">Visualização de PDF</string>
+    <string name="reader_pdf_night_mode">Cores noturnas</string>
+    <string name="reader_pdf_night_mode_hint">Inverta as cores da página para ler com mais conforto no escuro.</string>
+    <string name="reader_pdf_spacing">Espaçamento entre páginas</string>
+    <string name="reader_pdf_spacing_compact">Compacto</string>
+    <string name="reader_pdf_spacing_comfortable">Confortável</string>
+    <string name="reader_font_size_percentage">Tamanho do texto: %1$d%%</string>
+    <string name="reader_line_height_value">Espaçamento entre linhas: %1$s</string>
+</resources>
