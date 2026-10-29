@@ -114,30 +114,28 @@ class QuoteViewModel @Inject constructor(
         }
     }
 
-    fun addQuote(text: String, author: String) {
+    fun addQuote(quote: Quote) {
         viewModelScope.launch {
-            if (text.isNotBlank()) {
+            if (quote.text.isNotBlank() && quote.author.isNotBlank()) {
                 val currentDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
-                val themeType = autoCategorizeTheme(text)
-                val newQuote = Quote(
-                    text = text.trim(),
-                    author = author.trim().ifBlank { "Unknown" },
-                    theme = themeType.name,
-                    date = currentDate,
-                    starred = false
+                repository.saveQuote(
+                    quote.copy(
+                        id = 0,
+                        text = quote.text.trim(),
+                        author = quote.author.trim(),
+                        theme = quote.theme ?: autoCategorizeTheme(quote.text).name,
+                        date = currentDate
+                    )
                 )
-                repository.saveQuote(newQuote)
             }
         }
     }
 
     fun editQuote(quote: Quote) {
         viewModelScope.launch {
-            // Re-categorize the theme when editing
-            val updatedQuote = quote.copy(
-                theme = autoCategorizeTheme(quote.text).name
-            )
-            repository.saveQuote(updatedQuote)
+            // An explicit user theme/category choice must not be silently
+            // overwritten by automatic text classification during editing.
+            repository.saveQuote(quote)
         }
     }
 
