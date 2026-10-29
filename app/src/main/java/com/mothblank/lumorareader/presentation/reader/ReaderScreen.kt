@@ -1138,12 +1138,18 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
         }
     }
 
-    LaunchedEffect(currentVisiblePage) {
-        if (currentVisiblePage != uiState.currentPdfPage) {
-            viewModel.onPdfPageChanged(currentVisiblePage)
-        }
-        for (page in (currentVisiblePage - 1)..(currentVisiblePage + 2)) {
-            viewModel.loadPdfPage(page)
+    // Avoid interpreting intermediate pages in an animated jump as user
+    // scrolling; otherwise navigation to a distant page can be interrupted.
+    var programmaticScroll by remember { mutableStateOf(false) }
+
+    LaunchedEffect(currentVisiblePage, programmaticScroll) {
+        if (!programmaticScroll) {
+            if (currentVisiblePage != uiState.currentPdfPage) {
+                viewModel.onPdfPageChanged(currentVisiblePage)
+            }
+            for (page in (currentVisiblePage - 1)..(currentVisiblePage + 2)) {
+                viewModel.loadPdfPage(page)
+            }
         }
     }
 
@@ -1151,7 +1157,12 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
         if (uiState.currentPdfPage != currentVisiblePage &&
             listState.layoutInfo.totalItemsCount > uiState.currentPdfPage
         ) {
-            listState.animateScrollToItem(uiState.currentPdfPage)
+            programmaticScroll = true
+            try {
+                listState.animateScrollToItem(uiState.currentPdfPage)
+            } finally {
+                programmaticScroll = false
+            }
         }
     }
 
