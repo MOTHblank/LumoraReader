@@ -59,11 +59,11 @@ class PdfBookReader(
     // BookReader fallback. The reader UI uses renderPage with its actual width.
     override suspend fun getPage(pageIndex: Int): Page = renderPage(pageIndex, 1080)
 
-    suspend fun renderPage(pageIndex: Int, targetWidthPx: Int): Page.PdfPage =
-        renderRegion(pageIndex, RectF(0f, 0f, 1f, 1f), targetWidthPx, MAX_PAGE_PIXELS)
+    suspend fun renderPage(pageIndex: Int, targetWidthPx: Int, pixelLimit: Int = MAX_PAGE_PIXELS): Page.PdfPage =
+        renderRegion(pageIndex, RectF(0f, 0f, 1f, 1f), targetWidthPx, minOf(pixelLimit, MAX_PAGE_PIXELS))
 
-    suspend fun renderTile(pageIndex: Int, region: RectF, targetWidthPx: Int): Page.PdfPage =
-        renderRegion(pageIndex, region, targetWidthPx, MAX_TILE_PIXELS)
+    suspend fun renderTile(pageIndex: Int, region: RectF, targetWidthPx: Int, pixelLimit: Int = MAX_TILE_PIXELS): Page.PdfPage =
+        renderRegion(pageIndex, region, targetWidthPx, minOf(pixelLimit, MAX_TILE_PIXELS))
 
     private suspend fun renderRegion(
         pageIndex: Int,
