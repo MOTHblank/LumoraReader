@@ -51,6 +51,20 @@ interface QuoteDao {
     @Query("SELECT * FROM quotes WHERE id = :id LIMIT 1")
     suspend fun getQuoteById(id: Int): QuoteEntity?
 
+    /** Literal substring search (avoids interpreting user-entered % and _ as wildcards). */
+    @Query("""
+        SELECT * FROM quotes WHERE
+            :query = '' OR
+            instr(lower(text), lower(:query)) > 0 OR
+            instr(lower(author), lower(:query)) > 0 OR
+            instr(lower(COALESCE(bookTitle, '')), lower(:query)) > 0 OR
+            instr(lower(COALESCE(note, '')), lower(:query)) > 0 OR
+            instr(lower(COALESCE(categories, '')), lower(:query)) > 0
+        ORDER BY date DESC, id DESC
+        LIMIT 40
+    """)
+    fun searchAll(query: String): Flow<List<QuoteEntity>>
+
     /** Book-specific excerpts for the reading notebook; bound by URI, never title. */
     @Query("SELECT * FROM quotes WHERE sourceUri = :uri ORDER BY date DESC, id DESC")
     fun observeForBook(uri: String): Flow<List<QuoteEntity>>
