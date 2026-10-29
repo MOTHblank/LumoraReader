@@ -13,5 +13,6 @@ data class RecentBookEntity(
     val progress: Float? = null,
     val positionIndex: Int = 0,
     val scrollOffset: Int = 0,
+    val epubAnchor: String? = null,
     val isAvailable: Boolean = true
 )
