@@ -101,3 +101,43 @@ resource fallback for other locales.
 The main reader surfaces call `onReaderSurfaceTapped()` rather than toggling
 settings directly, so an existing focus session always exits cleanly before
 a settings sheet can open.
+
+
+## Phase 7: book notebook and durable annotations
+
+The reading notebook is available from the reader toolbar and the reader
+settings sheet. It reports the active document's progress, saved location
+bookmarks, annotations, and recent source-linked quotations.
+
+- `ReadingBookmarkEntity` is keyed by an auto-generated ID and contains a
+  required `bookUri`, label, optional note, and **either** an EPUB
+  chunk/text-relative anchor **or** a zero-based PDF page index.
+- `ReadingBookmarkDao` filters all update/delete operations by the source URI,
+  protecting bookmarks from accidental cross-book updates. Bookmarks are kept
+  in their own `reading_bookmarks` table; this intentionally avoids touching
+  the existing `quotes` and `reading_history` rows.
+- Room schema version 7 introduces that new table and its URI index through
+  `MIGRATION_6_7`. Both `AppDatabase.getDatabase()` and the Hilt provider
+  register the complete migration chain through 7. Do not use a destructive
+  fallback or change an existing database filename during future migrations.
+- `ReadingBookmarksRepository` is responsible for persistence and mapping;
+  `ReaderViewModel` owns the active document, location selection, and
+  cancellation of per-book Flow collectors.
+- EPUB bookmark jumps use the original spine/character offset when present,
+  regenerated through the established WebView lifecycle. Unanchored legacy
+  entries return to the start of their saved chunk instead of restoring a
+  previous unrelated viewport location.
+- PDF bookmark jumps use an existing page-navigation path, preserving
+  resolution-aware rendering and the cache budget.
+- The notebook shows up to 30 recent book quotations for responsive rendering;
+  the full quotation library remains the canonical place for managing all
+  quotations. Book-linked filtering uses the exact `sourceUri`, not a title.
+  Unlinked older or manually entered quotations remain visible under
+  **All books**, but cannot be reliably assigned to a source automatically.
+
+The notebook is a reader presentation component; it does not open its own
+independent book reader or retain large page bitmaps.
+
+Compile and device validation were deliberately left to the project's
+normal local validation workflow. Source inspection is not equivalent to
+an Android build.
