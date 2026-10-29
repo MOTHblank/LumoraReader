@@ -92,8 +92,11 @@ class MainActivity : AppCompatActivity() {
                         composable("language") { LanguageScreen(navController) }
                         composable("books") { BooksScreen(navController) }
                         composable(
-                            route = "reader/{bookUri}",
-                            arguments = listOf(navArgument("bookUri") { type = NavType.StringType })
+                            route = "reader/{bookUri}?quoteId={quoteId}",
+                            arguments = listOf(
+                                navArgument("bookUri") { type = NavType.StringType },
+                                navArgument("quoteId") { type = NavType.IntType; defaultValue = -1 }
+                            )
                         ) {
                             ReaderScreen()
                         }
