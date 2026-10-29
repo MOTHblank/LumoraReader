@@ -27,7 +27,7 @@ interface QuoteDao {
     @Query("""
         SELECT * FROM quotes 
         WHERE 
-            (:query = '' OR text LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%' OR bookTitle LIKE '%' || :query || '%')
+            (:query = '' OR text LIKE '%' || :query || '%' OR author LIKE '%' || :query || '%' OR bookTitle LIKE '%' || :query || '%' OR note LIKE '%' || :query || '%' OR categories LIKE '%' || :query || '%')
             AND (:theme IS NULL OR theme = :theme)
             AND (:starred IS NULL OR starred = :starred)
         ORDER BY
