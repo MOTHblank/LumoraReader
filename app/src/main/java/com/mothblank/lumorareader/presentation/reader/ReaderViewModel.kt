@@ -17,6 +17,8 @@ import com.mothblank.lumorareader.data.EpubChapter
 import com.mothblank.lumorareader.data.PdfBookReader
 import com.mothblank.lumorareader.data.RecentBooksRepository
 import com.mothblank.lumorareader.data.ReadingBookmarksRepository
+import com.mothblank.lumorareader.data.ReadingActivityRepository
+import android.os.SystemClock
 import com.mothblank.lumorareader.domain.model.ReadingBookmark
 import com.mothblank.lumorareader.domain.model.EpubReadingAnchor
 import com.mothblank.lumorareader.domain.model.RecentBook
@@ -56,6 +58,7 @@ class ReaderViewModel @Inject constructor(
     private val quoteRepository: QuoteRepository,
     private val recentBooksRepository: RecentBooksRepository,
     private val bookmarksRepository: ReadingBookmarksRepository,
+    private val readingActivityRepository: ReadingActivityRepository,
     @ApplicationContext private val context: Context
 ) : ViewModel() {
     private val _uiState = MutableStateFlow(ReaderUiState())
@@ -96,6 +99,9 @@ class ReaderViewModel @Inject constructor(
     private var bookmarkObserveJob: Job? = null
     private var quoteObserveJob: Job? = null
     private var originalOrientation: Int? = null
+    private var foregroundStartedElapsed: Long? = null
+    private var foregroundStartedWall: Long = 0L
+    private var foregroundBookUri: String? = null
 
     init {
         viewModelScope.launch {
@@ -259,7 +265,35 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /** Time with the reader visible, not a claim of reader attention. */
+    fun onReaderForeground() {
+        if (foregroundStartedElapsed != null) return
+        val uri = currentBookUri ?: return
+        val state = uiState.value
+        if (state.isLoading || state.error != null || (!state.isEpub && !state.isPdf)) return
+        foregroundStartedElapsed = SystemClock.elapsedRealtime()
+        foregroundStartedWall = System.currentTimeMillis()
+        foregroundBookUri = uri
+    }
+
+    fun onReaderBackground() {
+        val started = foregroundStartedElapsed ?: return
+        val uri = foregroundBookUri ?: return
+        val duration = (SystemClock.elapsedRealtime() - started).coerceAtLeast(0L)
+        val wall = foregroundStartedWall
+        foregroundStartedElapsed = null
+        foregroundBookUri = null
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                readingActivityRepository.recordForegroundSession(uri, wall, duration)
+            } catch (error: Exception) {
+                Timber.w(error, "Unable to save foreground reading session")
+            }
+        }
+    }
+
     private fun openBook(uri: String) {
+        onReaderBackground()
         // Invalidate requests before replacing the reader, even if opening suspends.
         bookOpenJob?.cancel()
         readerGeneration++
@@ -296,7 +330,19 @@ class ReaderViewModel @Inject constructor(
                             null
                         }
                     }
-                val requestedEpubAnchor = EpubReadingAnchor.parse(requestedQuote?.epubAnchor)
+                // Bookmark deep links must match the exact source URI.
+                val requestedBookmark = if (requestedQuote == null) {
+                    savedStateHandle.get<Long>("bookmarkId")?.takeIf { it > 0L }?.let { id ->
+                        try { bookmarksRepository.getForBook(id, uri) }
+                        catch (error: Exception) {
+                            Timber.w(error, "Unable to resolve bookmark destination")
+                            null
+                        }
+                    }
+                } else null
+                val requestedEpubAnchor = EpubReadingAnchor.parse(
+                    requestedQuote?.epubAnchor ?: requestedBookmark?.epubAnchor
+                )
                 val bookDetails = bookRepository.getBookDetails(uri)
                 bookReader?.close()
                 bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
@@ -328,14 +374,18 @@ class ReaderViewModel @Inject constructor(
                         (requestedEpubAnchor?.spineIndex?.takeIf { it >= 0 }
                             ?.let { epubReader.chunkForSpine(it) }
                             ?: requestedQuote?.epubChunkIndex
+                            ?: requestedBookmark?.epubChunkIndex
                             ?: saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
                     } else 0
-                    currentScrollOffset = if (requestedQuote == null && saved?.positionIndex == initialChunk) {
+                    currentScrollOffset = if (requestedQuote == null && requestedBookmark == null &&
+                        saved?.positionIndex == initialChunk) {
                         saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
-                    currentEpubAnchor = if (requestedQuote != null) requestedEpubAnchor
-                        else if (saved?.positionIndex == initialChunk) EpubReadingAnchor.parse(saved?.epubAnchor)
-                        else null
+                    currentEpubAnchor = if (requestedQuote != null || requestedBookmark != null) {
+                        requestedEpubAnchor ?: EpubReadingAnchor.create(-1, 0, 0f)
+                    } else if (saved?.positionIndex == initialChunk) {
+                        EpubReadingAnchor.parse(saved?.epubAnchor)
+                    } else null
                     initialChunkLoaded = false
                     val contents = epubReader.getDetailedTableOfContents()
                         .filter { it.title.isNotBlank() && it.chunkIndex in 0 until chunkCount }
@@ -358,7 +408,8 @@ class ReaderViewModel @Inject constructor(
                 } else {
                     val pageCount = bookReader?.getPageCount() ?: 0
                     val initialPage = if (pageCount > 0) {
-                        (requestedQuote?.pageNumber?.minus(1) ?: saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
+                        (requestedQuote?.pageNumber?.minus(1) ?: requestedBookmark?.pdfPageIndex
+                            ?: saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
                     } else 0
                     _uiState.update {
                         it.copy(bookType = BookType.PDF, pdfPageCount = pageCount,
@@ -1000,6 +1051,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     override fun onCleared() {
+        onReaderBackground()
         bookmarkObserveJob?.cancel()
         quoteObserveJob?.cancel()
         bookOpenJob?.cancel()
