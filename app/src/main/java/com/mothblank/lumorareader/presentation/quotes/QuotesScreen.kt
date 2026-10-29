@@ -170,6 +170,47 @@ fun QuotesScreen(
 
                 Spacer(modifier = Modifier.height(16.dp))
 
+                // Group quotations by the document they were captured from.
+                // Selecting "All books" retains manually entered and legacy quotes.
+                val books = uiState.bookSources
+                var bookPickerExpanded by remember { mutableStateOf(false) }
+                Box {
+                    OutlinedButton(
+                        onClick = { bookPickerExpanded = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = books.firstOrNull {
+                                it.sourceUri == filterOptions.filterBookUri
+                            }?.bookTitle ?: stringResource(R.string.quote_all_books),
+                            maxLines = 1
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = bookPickerExpanded,
+                        onDismissRequest = { bookPickerExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.quote_all_books)) },
+                            onClick = {
+                                viewModel.onBookSourceChange(null)
+                                bookPickerExpanded = false
+                            }
+                        )
+                        books.forEach { book ->
+                            DropdownMenuItem(
+                                text = { Text(book.bookTitle, maxLines = 1) },
+                                onClick = {
+                                    viewModel.onBookSourceChange(book.sourceUri)
+                                    bookPickerExpanded = false
+                                }
+                            )
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
                 // Sort dropdown
                 var sortMenuExpanded by remember { mutableStateOf(false) }
                 Box {
