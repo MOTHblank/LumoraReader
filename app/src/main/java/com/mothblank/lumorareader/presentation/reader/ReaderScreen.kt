@@ -1076,6 +1076,16 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                             (anchor?.fraction ?: -1f) + "," +
                                             viewModel.getScrollPosition() + ");"
                                         v.evaluateJavascript(command, null)
+                                        val passage = viewModel.uiState.value.quoteHighlightText
+                                        if (!passage.isNullOrBlank() && anchor != null && anchor.spineIndex >= 0) {
+                                            v.evaluateJavascript(
+                                                "window.lumoraHighlightPassage?.(" +
+                                                    anchor.spineIndex + "," +
+                                                    anchor.characterOffset + "," +
+                                                    JSONObject.quote(passage) + ");",
+                                                null
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -1087,6 +1097,9 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                         wv.evaluateJavascript(
                             "window.isTextSelectionActive = " + uiState.isTextSelectionActive + ";", null
                         )
+                        if (uiState.quoteHighlightText == null) {
+                            wv.evaluateJavascript("window.lumoraClearQuoteHighlight?.();", null)
+                        }
                     }
                 )
             }
@@ -1212,6 +1225,82 @@ private fun generateJsBundle(): String = """
             });
         };
         window.addEventListener('scroll', saveScroll, { passive: true });
+
+        // Highlight the single passage reached from the quotation library.
+        // DOM Range avoids rewriting book markup, links, and selection handlers.
+        let quoteOverlay = null;
+        let highlightedRange = null;
+        const updateQuoteOverlay = () => {
+            if (!quoteOverlay || !highlightedRange) return;
+            quoteOverlay.replaceChildren();
+            Array.from(highlightedRange.getClientRects()).slice(0, 80).forEach(rect => {
+                if (rect.width < 1 || rect.height < 1) return;
+                const mark = document.createElement('div');
+                mark.style.cssText = 'position:absolute;background:rgba(250,184,57,.38);border-radius:3px;';
+                mark.style.left = rect.left + 'px';
+                mark.style.top = rect.top + 'px';
+                mark.style.width = rect.width + 'px';
+                mark.style.height = rect.height + 'px';
+                quoteOverlay.appendChild(mark);
+            });
+        };
+        window.lumoraClearQuoteHighlight = () => {
+            if (window.CSS?.highlights) CSS.highlights.delete('lumora-return-passage');
+            quoteOverlay?.remove();
+            quoteOverlay = null;
+            highlightedRange = null;
+        };
+        window.lumoraHighlightPassage = (spine, offset, text) => {
+            window.lumoraClearQuoteHighlight();
+            if (!text || text.length > 2000 || offset < 0) return;
+            const section = document.querySelector('[data-lumora-spine="' + spine + '"]');
+            if (!section) return;
+            const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+            let node, consumed = 0, startNode = null, endNode = null, startOffset = 0, endOffset = 0;
+            const end = offset + text.length;
+            while ((node = walker.nextNode())) {
+                const length = node.textContent.length;
+                if (!startNode && offset < consumed + length) {
+                    startNode = node;
+                    startOffset = offset - consumed;
+                }
+                if (startNode && end <= consumed + length) {
+                    endNode = node;
+                    endOffset = Math.max(0, end - consumed);
+                    break;
+                }
+                consumed += length;
+            }
+            if (!startNode || !endNode) return;
+            const range = document.createRange();
+            try {
+                range.setStart(startNode, startOffset);
+                range.setEnd(endNode, endOffset);
+            } catch (_) { return; }
+            const normalize = s => s.replace(/\\s+/g, ' ').trim();
+            if (!normalize(range.toString()).startsWith(normalize(text).slice(0, 24))) return;
+            if (window.CSS?.highlights && window.Highlight) {
+                CSS.highlights.set('lumora-return-passage', new Highlight(range));
+            } else {
+                highlightedRange = range;
+                quoteOverlay = document.createElement('div');
+                quoteOverlay.style.cssText =
+                    'position:fixed;inset:0;pointer-events:none;z-index:2147483646;';
+                document.body.appendChild(quoteOverlay);
+                updateQuoteOverlay();
+            }
+        };
+        let highlightFrame = false;
+        const refreshHighlight = () => {
+            if (!quoteOverlay || highlightFrame) return;
+            highlightFrame = true;
+            requestAnimationFrame(() => {
+                highlightFrame = false;
+                updateQuoteOverlay();
+            });
+        };
+        window.addEventListener('scroll', refreshHighlight, { passive: true });
+        window.addEventListener('resize', refreshHighlight);
 
         document.addEventListener('touchstart', (e) => {
             if (e.touches.length === 0) return;
