@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_notebook_title">Caderno de leitura</string>
+    <string name="reader_notebook_untitled">Livro sem título</string>
+    <string name="reader_notebook_page">Página %1$d</string>
+    <string name="reader_notebook_section">Seção %1$d</string>
+    <string name="reader_notebook_progress">%1$d%% lido</string>
+    <string name="reader_notebook_add">Marcar posição atual</string>
+    <string name="reader_notebook_bookmarks">Marcadores (%1$d)</string>
+    <string name="reader_notebook_no_bookmarks">Nenhum marcador salvo para este livro.</string>
+    <string name="reader_notebook_jump">Ir para o trecho</string>
+    <string name="reader_notebook_edit">Editar</string>
+    <string name="reader_notebook_delete">Excluir</string>
+    <string name="reader_notebook_quotes">Citações (%1$d)</string>
+    <string name="reader_notebook_no_quotes">Nenhuma citação vinculada a este livro.</string>
+    <string name="reader_notebook_quotes_limit">Exibindo as 30 citações mais recentes.</string>
+    <string name="reader_notebook_close">Fechar</string>
+    <string name="reader_notebook_annotation">Anotação do marcador</string>
+    <string name="reader_notebook_label">Título do marcador</string>
+    <string name="reader_notebook_note">Nota pessoal (opcional)</string>
+    <string name="reader_notebook_save">Salvar</string>
+    <string name="reader_notebook_cancel">Cancelar</string>
+    <string name="reader_notebook_open">Abrir caderno de leitura</string>
+</resources>
