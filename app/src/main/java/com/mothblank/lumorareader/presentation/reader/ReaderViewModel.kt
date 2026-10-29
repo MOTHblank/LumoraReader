@@ -737,11 +737,20 @@ class ReaderViewModel @Inject constructor(
     // PDF Zoom functions
     fun onPdfPageZoomChange(scale: Float, offsetX: Float, offsetY: Float) {
         val clampedScale = scale.coerceIn(1f, 4f)
+        val width = pdfViewportWidthPx.toFloat()
+        val bitmap = (pageCache[uiState.value.currentPdfPage] as? Page.PdfPage)?.image
+        val height = if (bitmap != null && bitmap.width > 0) {
+            width * bitmap.height / bitmap.width
+        } else width * 1.414f
+        // Accessible zoom buttons and touch gestures use the same bounded pan.
+        // Without this, zooming out can strand the viewport outside the page.
+        val maxX = width * (clampedScale - 1f) / 2f
+        val maxY = height * (clampedScale - 1f) / 2f
         _uiState.update {
             it.copy(
                 pdfPageZoomScale = clampedScale,
-                pdfPageOffsetX = if (clampedScale == 1f) 0f else offsetX,
-                pdfPageOffsetY = if (clampedScale == 1f) 0f else offsetY
+                pdfPageOffsetX = offsetX.coerceIn(-maxX, maxX),
+                pdfPageOffsetY = offsetY.coerceIn(-maxY, maxY)
             )
         }
         schedulePdfTile()
