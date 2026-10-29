@@ -109,6 +109,26 @@ class ReaderViewModel @Inject constructor(
                 _uiState.update { it.copy(fontFamily = family) }
             }
         }
+        viewModelScope.launch {
+            userPreferencesRepository.epubLineSpacing.collect { spacing ->
+                _uiState.update { it.copy(epubLineSpacing = spacing) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.epubMargin.collect { margin ->
+                _uiState.update { it.copy(epubMargin = margin) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.pdfNightMode.collect { night ->
+                _uiState.update { it.copy(pdfNightMode = night) }
+            }
+        }
+        viewModelScope.launch {
+            userPreferencesRepository.pdfPageSpacingDp.collect { spacing ->
+                _uiState.update { it.copy(pdfPageSpacingDp = spacing) }
+            }
+        }
         retryLoading()
     }
     fun setOriginalOrientation(orientation: Int) {
@@ -269,6 +289,8 @@ class ReaderViewModel @Inject constructor(
         themeOverride: LumoraTheme? = null,
         scaleOverride: Float? = null,
         fontOverride: String? = null,
+        lineSpacingOverride: Float? = null,
+        marginOverride: String? = null,
         targetAnchor: EpubReadingAnchor? = null,
         forceFreshHtml: Boolean = false
     ) {
@@ -285,14 +307,18 @@ class ReaderViewModel @Inject constructor(
                 val currentTheme = themeOverride ?: currentState.theme
                 val currentFontSizeScale = scaleOverride ?: currentState.fontSizeScale
                 val fontFamily = fontOverride ?: currentState.fontFamily
-                val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale-$fontFamily" +
+                val lineSpacing = (lineSpacingOverride ?: currentState.epubLineSpacing).coerceIn(1.4f, 2.2f)
+                val margins = marginOverride ?: currentState.epubMargin
+                val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale-$fontFamily-$lineSpacing-$margins" +
                     if (forceFreshHtml) "-jump-${++epubNavigationGeneration}" else ""
                 val cachedChunk = chunkFileCache[cacheKey] ?: withContext(Dispatchers.IO) {
                     val file = epubReader.generateScrollableHtmlFile(
                         chunkIndex = chunkIndex,
                         fontSizeScale = currentFontSizeScale,
                         theme = currentTheme,
-                        fontFamily = fontFamily
+                        fontFamily = fontFamily,
+                        lineSpacing = lineSpacing,
+                        pageMargin = margins
                     )
                     val authority = "${BuildConfig.APPLICATION_ID}.provider"
                     CachedEpubChunk(FileProvider.getUriForFile(context, authority, file).toString(), file)
@@ -627,8 +653,17 @@ class ReaderViewModel @Inject constructor(
 
     fun onToggleMenuVisibility() {
         if (!uiState.value.isTextSelectionActive) {
-            _uiState.update { it.copy(isMenuVisible = !it.isMenuVisible) }
+            _uiState.update { it.copy(isMenuVisible = !it.isMenuVisible, focusMode = false) }
         }
+    }
+
+    fun setFocusMode(enabled: Boolean) {
+        if (uiState.value.isTextSelectionActive) return
+        _uiState.update { it.copy(focusMode = enabled, isMenuVisible = false) }
+    }
+
+    fun onReaderSurfaceTapped() {
+        if (uiState.value.focusMode) setFocusMode(false) else onToggleMenuVisibility()
     }
 
     fun onThemeChange(theme: LumoraTheme) {
@@ -660,6 +695,35 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+
+    fun onEpubLineSpacingChange(spacing: Float) {
+        val next = spacing.coerceIn(1.4f, 2.2f)
+        viewModelScope.launch {
+            userPreferencesRepository.setEpubLineSpacing(next)
+            if (uiState.value.isEpub) {
+                loadEpubChunk(uiState.value.currentChunkIndex, lineSpacingOverride = next)
+            }
+        }
+    }
+
+    fun onEpubMarginChange(margin: String) {
+        if (margin !in setOf("Compact", "Comfortable", "Wide")) return
+        viewModelScope.launch {
+            userPreferencesRepository.setEpubMargin(margin)
+            if (uiState.value.isEpub) {
+                loadEpubChunk(uiState.value.currentChunkIndex, marginOverride = margin)
+            }
+        }
+    }
+
+    fun onPdfNightModeChange(enabled: Boolean) {
+        viewModelScope.launch { userPreferencesRepository.setPdfNightMode(enabled) }
+    }
+
+    fun onPdfPageSpacingChange(spacingDp: Int) {
+        if (spacingDp !in setOf(8, 24)) return
+        viewModelScope.launch { userPreferencesRepository.setPdfPageSpacingDp(spacingDp) }
+    }
 
     fun onTextSelected(text: String, sourceFileUri: String? = null, spineIndex: Int = -1, characterOffset: Int = 0, fraction: Float = 0f) {
         val normalized = text.trim()
