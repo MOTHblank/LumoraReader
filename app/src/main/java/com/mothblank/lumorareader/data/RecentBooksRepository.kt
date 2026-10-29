@@ -87,8 +87,10 @@ class RecentBooksRepository @Inject constructor(
                 scrollOffset = previous?.scrollOffset ?: book.scrollOffset,
                 epubAnchor = previous?.epubAnchor ?: book.epubAnchor,
                 isFavorite = previous?.isFavorite ?: book.isFavorite,
-                readingStatus = previous?.readingStatus ?: book.readingStatus.name,
+                readingStatus = previous?.readingStatus ?: "READING",
                 collectionName = previous?.collectionName ?: book.collectionName,
+                coverImageUri = book.coverImageUri ?: previous?.coverImageUri,
+                author = book.author ?: previous?.author,
                 isAvailable = true
             )
         )
@@ -147,7 +149,9 @@ class RecentBooksRepository @Inject constructor(
         epubAnchor = epubAnchor,
         isAvailable = isAvailable,
         isFavorite = isFavorite,
-        readingStatus = readingStatus.name,
+        // Gson may deserialize legacy SharedPreferences JSON without this
+        // newly introduced enum field. Never discard old history on that account.
+        readingStatus = runCatching { readingStatus.name }.getOrDefault("READING"),
         collectionName = collectionName
     )
 
