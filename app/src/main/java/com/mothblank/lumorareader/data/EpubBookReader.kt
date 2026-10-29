@@ -20,6 +20,9 @@ import java.io.FileOutputStream
 import java.io.IOException
 import java.util.zip.ZipInputStream
 
+/** A named navigation target with an original spine position. */
+data class EpubChapter(val title: String, val chunkIndex: Int, val spineIndex: Int)
+
 class EpubBookReader(
     private val context: Context,
     private val bookUri: String
@@ -95,12 +98,15 @@ class EpubBookReader(
         Page.EpubPage("<html><head><meta charset=\"utf-8\"></head><body>$body</body></html>", contentBaseUrl)
     }
 
-    // ToC parsers resolve spine indices; convert them to public chunk indices.
-    override fun getTableOfContents(): List<Pair<String, Int>> =
-        tableOfContents.mapNotNull { (title, chapterIndex) ->
-            val chunkIndex = chunkedSpine.indexOfFirst { chapterIndex in it }
-            if (chunkIndex >= 0) title to chunkIndex else null
+    // Preserve original spine identifiers: several chapters can share one HTML chunk.
+    fun getDetailedTableOfContents(): List<EpubChapter> =
+        tableOfContents.mapNotNull { (title, spineIndex) ->
+            val chunk = chunkForSpine(spineIndex)
+            if (chunk != null) EpubChapter(title, chunk, spineIndex) else null
         }
+
+    override fun getTableOfContents(): List<Pair<String, Int>> =
+        getDetailedTableOfContents().map { it.title to it.chunkIndex }
 
     override fun close() {
         tempDir.deleteRecursively()
@@ -280,7 +286,7 @@ class EpubBookReader(
 
         val finalHtml = """
         <!DOCTYPE html>
-        <html lang="en">
+        <html>
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
             <meta charset="utf-8">
