@@ -135,7 +135,7 @@ class QuoteViewModel @Inject constructor(
         viewModelScope.launch {
             // An explicit user theme/category choice must not be silently
             // overwritten by automatic text classification during editing.
-            repository.saveQuote(quote)
+            repository.saveQuote(quote.copy(theme = quote.theme ?: autoCategorizeTheme(quote.text).name))
         }
     }
 
