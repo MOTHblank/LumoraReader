@@ -870,12 +870,22 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
 
                             addJavascriptInterface(object : Any() {
                                 @JavascriptInterface
-                                fun onTextSelected(text: String) {
-                                    activeView.post { viewModel.onTextSelected(text) }
+                                fun onTextSelected(text: String, spineIndex: Int, characterOffset: Int, fraction: Float) {
+                                    activeView.post {
+                                        if (viewModel.uiState.value.epubFileUri == fileUri) {
+                                            viewModel.onTextSelected(
+                                                text, fileUri, spineIndex, characterOffset, fraction
+                                            )
+                                        }
+                                    }
                                 }
                                 @JavascriptInterface
                                 fun onSelectionCleared() {
-                                    activeView.post { viewModel.clearTextSelection() }
+                                    activeView.post {
+                                        if (viewModel.uiState.value.epubFileUri == fileUri) {
+                                            viewModel.clearTextSelection()
+                                        }
+                                    }
                                 }
                             }, "AndroidSelectionInterface")
 
@@ -1073,9 +1083,26 @@ private fun generateJsBundle(): String = """
         
         document.addEventListener('touchmove', () => clearTimeout(longTimer));
         document.addEventListener('selectionchange', () => {
-            const txt = sel()?.toString()?.trim();
-            if (txt && txt.length > 3) {
-                window.AndroidSelectionInterface?.onTextSelected(txt);
+            const selection = sel();
+            const txt = selection?.toString()?.trim();
+            if (txt && txt.length > 3 && selection.rangeCount > 0) {
+                const range = selection.getRangeAt(0);
+                const node = range.startContainer;
+                const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
+                const section = element?.closest?.('[data-lumora-spine]');
+                let spine = -1, offset = 0;
+                if (section) {
+                    try {
+                        const preceding = document.createRange();
+                        preceding.selectNodeContents(section);
+                        preceding.setEnd(node, range.startOffset);
+                        spine = Number(section.dataset.lumoraSpine);
+                        offset = preceding.toString().length;
+                    } catch (_) { /* Keep section fraction when markup is unusual. */ }
+                }
+                window.AndroidSelectionInterface?.onTextSelected(
+                    txt, spine, offset, fractionOfScroll()
+                );
             } else {
                 window.AndroidSelectionInterface?.onSelectionCleared();
             }
