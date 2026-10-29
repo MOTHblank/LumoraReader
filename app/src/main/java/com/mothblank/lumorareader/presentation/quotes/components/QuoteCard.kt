@@ -7,6 +7,7 @@ import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MenuBook
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -152,53 +153,79 @@ fun EnhancedQuoteCard(
                 }
             }
 
-            // Footer with action buttons
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                // Author name
-                Text(
-                    text = "— ${quote.author}",
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontStyle = FontStyle.Italic,
-                    color = themeColorScheme.onPrimaryContainer,
-                    modifier = Modifier.weight(1f),
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-
-                // Action buttons
-                Row {
-                    IconButton(
-                        onClick = { onEditClick(quote) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = stringResource(R.string.edit_quote),
-                            tint = themeColorScheme.onPrimaryContainer
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { onAddToWidgetClick(quote) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = stringResource(R.string.add_to_widget),
-                            tint = themeColorScheme.onPrimaryContainer
-                        )
-                    }
-
-                    IconButton(
-                        onClick = { onDeleteClick(quote) }
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = stringResource(R.string.delete_quote),
-                            tint = themeColorScheme.onPrimaryContainer
-                        )
+            // Keep the three familiar icon actions on spacious cards; a
+            // compact overflow menu prevents them obscuring the author in the
+            // two-column phone grid. The per-quote palette stays unchanged.
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Text(
+                        text = "— ${quote.author}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontStyle = FontStyle.Italic,
+                        color = themeColorScheme.onPrimaryContainer,
+                        modifier = Modifier.weight(1f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (maxWidth < 255.dp) {
+                        var expanded by remember(quote.id) { mutableStateOf(false) }
+                        Box {
+                            IconButton(onClick = { expanded = true }) {
+                                Icon(
+                                    Icons.Default.MoreVert,
+                                    contentDescription = stringResource(R.string.more_actions),
+                                    tint = themeColorScheme.onPrimaryContainer
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = expanded,
+                                onDismissRequest = { expanded = false }
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.edit_quote)) },
+                                    onClick = { expanded = false; onEditClick(quote) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Edit, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.add_to_widget)) },
+                                    onClick = { expanded = false; onAddToWidgetClick(quote) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Add, contentDescription = null)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.delete_quote)) },
+                                    onClick = { expanded = false; onDeleteClick(quote) },
+                                    leadingIcon = {
+                                        Icon(Icons.Default.Delete, contentDescription = null)
+                                    }
+                                )
+                            }
+                        }
+                    } else {
+                        Row {
+                            IconButton(onClick = { onEditClick(quote) }) {
+                                Icon(Icons.Default.Edit,
+                                    contentDescription = stringResource(R.string.edit_quote),
+                                    tint = themeColorScheme.onPrimaryContainer)
+                            }
+                            IconButton(onClick = { onAddToWidgetClick(quote) }) {
+                                Icon(Icons.Default.Add,
+                                    contentDescription = stringResource(R.string.add_to_widget),
+                                    tint = themeColorScheme.onPrimaryContainer)
+                            }
+                            IconButton(onClick = { onDeleteClick(quote) }) {
+                                Icon(Icons.Default.Delete,
+                                    contentDescription = stringResource(R.string.delete_quote),
+                                    tint = themeColorScheme.onPrimaryContainer)
+                            }
+                        }
                     }
                 }
             }
