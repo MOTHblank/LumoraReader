@@ -61,7 +61,9 @@ fun BooksScreen(
         val selected = books.filter { book ->
             (!favoritesOnly || book.isFavorite) &&
                 (statusName == null || book.readingStatus.name == statusName) &&
-                (collectionFilter == null || book.collectionName == collectionFilter) &&
+                (collectionFilter == null ||
+                    if (collectionFilter == "__NONE__") book.collectionName.isNullOrBlank()
+                    else book.collectionName == collectionFilter) &&
                 (query.isEmpty() || listOfNotNull(book.title, book.author, book.collectionName)
                     .any { it.lowercase(Locale.ROOT).contains(query) })
         }
@@ -192,7 +194,11 @@ fun BooksScreen(
                                 onClick = { showCollectionMenu = true },
                                 label = {
                                     Text(
-                                        collectionFilter ?: stringResource(R.string.library_filter_collection),
+                                        when (collectionFilter) {
+                                            null -> stringResource(R.string.library_filter_collection)
+                                            "__NONE__" -> stringResource(R.string.library_no_collection)
+                                            else -> collectionFilter.orEmpty()
+                                        },
                                         maxLines = 1
                                     )
                                 }
@@ -204,6 +210,13 @@ fun BooksScreen(
                                 DropdownMenuItem(
                                     text = { Text(stringResource(R.string.library_all_collections)) },
                                     onClick = { collectionFilter = null; showCollectionMenu = false }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text(stringResource(R.string.library_no_collection)) },
+                                    onClick = {
+                                        collectionFilter = "__NONE__"
+                                        showCollectionMenu = false
+                                    }
                                 )
                                 allCollections.forEach { name ->
                                     DropdownMenuItem(
