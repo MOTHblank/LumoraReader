@@ -26,6 +26,7 @@ import com.mothblank.lumorareader.presentation.language.LanguageScreen
 import com.mothblank.lumorareader.presentation.preferences.UserPreferencesViewModel
 import com.mothblank.lumorareader.presentation.quotes.QuotesScreen
 import com.mothblank.lumorareader.presentation.reader.ReaderScreen
+import com.mothblank.lumorareader.presentation.search.UnifiedSearchScreen
 import com.mothblank.lumorareader.presentation.theme.ThemeScreen
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import androidx.compose.animation.animateColorAsState
@@ -91,11 +92,13 @@ class MainActivity : AppCompatActivity() {
                         composable("theme") { ThemeScreen(navController) }
                         composable("language") { LanguageScreen(navController) }
                         composable("books") { BooksScreen(navController) }
+                        composable("search") { UnifiedSearchScreen(navController) }
                         composable(
-                            route = "reader/{bookUri}?quoteId={quoteId}",
+                            route = "reader/{bookUri}?quoteId={quoteId}&bookmarkId={bookmarkId}",
                             arguments = listOf(
                                 navArgument("bookUri") { type = NavType.StringType },
-                                navArgument("quoteId") { type = NavType.IntType; defaultValue = -1 }
+                                navArgument("quoteId") { type = NavType.IntType; defaultValue = -1 },
+                                navArgument("bookmarkId") { type = NavType.LongType; defaultValue = -1L }
                             )
                         ) {
                             ReaderScreen()
