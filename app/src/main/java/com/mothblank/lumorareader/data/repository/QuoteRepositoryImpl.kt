@@ -51,7 +51,11 @@ private fun QuoteEntity.toDomainModel(): Quote {
         bookTitle = this.bookTitle,
         bookAuthor = this.bookAuthor,
         pageNumber = this.pageNumber,
-        chapterTitle = this.chapterTitle
+        chapterTitle = this.chapterTitle,
+        sourceUri = this.sourceUri,
+        epubChunkIndex = this.epubChunkIndex,
+        epubAnchor = this.epubAnchor,
+        note = this.note
     )
 }
 
@@ -68,6 +72,10 @@ private fun Quote.toEntity(): QuoteEntity {
         bookTitle = this.bookTitle,
         bookAuthor = this.bookAuthor,
         pageNumber = this.pageNumber,
-        chapterTitle = this.chapterTitle
+        chapterTitle = this.chapterTitle,
+        sourceUri = this.sourceUri,
+        epubChunkIndex = this.epubChunkIndex,
+        epubAnchor = this.epubAnchor,
+        note = this.note
     )
 }
