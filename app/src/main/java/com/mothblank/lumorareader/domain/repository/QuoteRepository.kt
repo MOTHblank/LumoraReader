@@ -23,6 +23,9 @@ interface QuoteRepository {
     /** Quotes with a verified document URI; legacy unlinked quotes stay in the library. */
     fun observeForBook(uri: String): Flow<List<Quote>>
 
+    /** Search source-linked and manually entered quotations without interpreting LIKE wildcards. */
+    fun searchAll(query: String): Flow<List<Quote>>
+
     /**
      * Saves a new quote or updates an existing one.
      */
