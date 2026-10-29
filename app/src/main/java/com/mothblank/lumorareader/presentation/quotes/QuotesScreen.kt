@@ -5,6 +5,7 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material3.*
@@ -38,6 +39,12 @@ fun QuotesScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val quotes = uiState.quotes
     val filterOptions = uiState.filterOptions
+    val activeFilterCount = listOf(
+        filterOptions.searchQuery.isNotBlank(),
+        filterOptions.filterTheme != null,
+        filterOptions.filterBookUri != null,
+        filterOptions.filterStarred
+    ).count { it }
     val gridState = androidx.compose.foundation.lazy.staggeredgrid.rememberLazyStaggeredGridState()
     val snackbarHostState = remember { SnackbarHostState() }
     val coroutineScope = rememberCoroutineScope()
@@ -104,7 +111,7 @@ fun QuotesScreen(
                 onSortByChange = { viewModel.onSortByChange(it) },
                 filterTheme = filterOptions.filterTheme,
                 onFilterThemeChange = { viewModel.onFilterThemeChange(it) },
-                allThemes = quotes.mapNotNull { it.theme }.distinct().sorted(),
+                allThemes = uiState.availableThemes,
                 onExport = { exportLauncher.launch("lumora_quotes.json") },
                 onImport = { importLauncher.launch("application/json") },
                 onShowFilterOptions = { showFilterDialog = true },
@@ -127,27 +134,66 @@ fun QuotesScreen(
             }
         }
     ) { paddingValues ->
-        if (quotes.isEmpty() && filterOptions.searchQuery.isBlank()) {
-            EmptyQuotesView(modifier = Modifier.padding(paddingValues))
-        } else {
-            QuotesGrid(
-                modifier = Modifier.padding(paddingValues),
-                quotes = quotes,
-                gridState = gridState,
-                onDeleteClicked = { quote -> quoteToDelete = quote },
-                onEditClicked = { quote -> quoteToEdit = quote },
-                onJumpClick = { quote ->
-                    quote.sourceUri?.takeIf { it.isNotBlank() }?.let { source ->
-                        navController.navigate("reader/${Uri.encode(source)}?quoteId=${quote.id}")
+        Column(modifier = Modifier.fillMaxSize().padding(paddingValues)) {
+            if (activeFilterCount > 0) {
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    item {
+                        AssistChip(
+                            onClick = { showFilterDialog = true },
+                            label = {
+                                Text(stringResource(R.string.quotes_active_filters, activeFilterCount))
+                            }
+                        )
                     }
-                },
-                onAddToWidgetClick = { quote ->
-                    // Handle adding to widget
-                    coroutineScope.launch {
-                        snackbarHostState.showSnackbar(addedToWidgetMessage)
+                    item {
+                        TextButton(onClick = { viewModel.clearFilters() }) {
+                            Text(stringResource(R.string.quotes_clear_filters))
+                        }
                     }
                 }
-            )
+            }
+            if (quotes.isEmpty()) {
+                if (activeFilterCount > 0) {
+                    Column(
+                        modifier = Modifier.fillMaxWidth().weight(1f),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            stringResource(R.string.quotes_no_filter_results),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                        TextButton(onClick = { viewModel.clearFilters() }) {
+                            Text(stringResource(R.string.quotes_clear_filters))
+                        }
+                    }
+                } else {
+                    EmptyQuotesView(modifier = Modifier.weight(1f))
+                }
+            } else {
+                QuotesGrid(
+                    modifier = Modifier.weight(1f),
+                    quotes = quotes,
+                    gridState = gridState,
+                    onDeleteClicked = { quote -> quoteToDelete = quote },
+                    onEditClicked = { quote -> quoteToEdit = quote },
+                    onJumpClick = { quote ->
+                        quote.sourceUri?.takeIf { it.isNotBlank() }?.let { source ->
+                            navController.navigate("reader/${Uri.encode(source)}?quoteId=${quote.id}")
+                        }
+                    },
+                    onAddToWidgetClick = { quote ->
+                        coroutineScope.launch {
+                            snackbarHostState.showSnackbar(addedToWidgetMessage)
+                        }
+                    }
+                )
+            }
         }
     }
 
@@ -277,7 +323,7 @@ fun QuotesScreen(
                                 themeMenuExpanded = false
                             }
                         )
-                        quotes.mapNotNull { it.theme }.distinct().sorted().forEach { theme ->
+                        uiState.availableThemes.forEach { theme ->
                             DropdownMenuItem(
                                 text = { Text(theme) },
                                 onClick = {
@@ -289,6 +335,13 @@ fun QuotesScreen(
                     }
                 }
 
+                Spacer(modifier = Modifier.height(12.dp))
+                TextButton(
+                    onClick = { viewModel.clearFilters() },
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text(stringResource(R.string.quotes_clear_filters))
+                }
                 Spacer(modifier = Modifier.height(24.dp))
             }
         }
