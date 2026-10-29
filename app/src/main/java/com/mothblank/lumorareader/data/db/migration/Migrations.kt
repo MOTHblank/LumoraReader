@@ -114,3 +114,19 @@ val MIGRATION_7_8 = object : Migration(7, 8) {
         db.execSQL("ALTER TABLE reading_history ADD COLUMN collectionName TEXT")
     }
 }
+
+/** Add foreground-session insights without altering books, quotes or bookmarks. */
+val MIGRATION_8_9 = object : Migration(8, 9) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS reading_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL,
+                bookUri TEXT NOT NULL,
+                startedAt INTEGER NOT NULL,
+                durationMillis INTEGER NOT NULL
+            )
+        """.trimIndent())
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_bookUri ON reading_sessions(bookUri)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_startedAt ON reading_sessions(startedAt)")
+    }
+}
