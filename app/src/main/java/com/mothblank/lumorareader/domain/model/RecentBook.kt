@@ -18,5 +18,6 @@ data class RecentBook(
     val progress: Float? = null, // Normalized progress from 0f to 1f
     val positionIndex: Int = 0, // PDF page or EPUB chunk, zero-based
     val scrollOffset: Int = 0, // EPUB scroll offset within the chunk
+    val epubAnchor: String? = null, // Stable EPUB content position and fractional fallback
     val isAvailable: Boolean = true
 )
