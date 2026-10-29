@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="reader_settings_navigation">Configurações e navegação da leitura</string>
+    <string name="reader_clear_text_selection">Limpar seleção de texto</string>
+    <string name="reader_save_selected_quote">Salvar texto selecionado como citação</string>
+    <string name="reader_zoom_in_pdf">Ampliar PDF</string>
+    <string name="reader_zoom_out_pdf">Reduzir ampliação do PDF</string>
+    <string name="reader_pdf_page_accessibility">Página %1$d do PDF</string>
+    <string name="reader_go_to_page_accessibility">Ir para página, atualmente %1$d de %2$d</string>
+    <string name="reader_progress_epub">%1$s, %2$d por cento lido</string>
+    <string name="reader_progress_pdf">Página %1$d de %2$d, %3$d por cento lido</string>
+    <string name="reader_orientation_portrait">Orientação retrato</string>
+    <string name="reader_orientation_landscape">Orientação paisagem</string>
+    <string name="reader_orientation_auto">Orientação automática</string>
+    <string name="reader_selected">, selecionado</string>
+    <string name="reader_theme_selected">%1$s, tema selecionado</string>
+    <string name="reader_theme_option">%1$s, tema</string>
+    <string name="reader_jump_page">Ir para página</string>
+    <string name="reader_jump_section">Ir para seção</string>
+    <string name="reader_font_size_a11y">Tamanho da fonte</string>
+</resources>
