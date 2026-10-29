@@ -48,6 +48,11 @@ class QuoteViewModel @Inject constructor(
 
     init {
         viewModelScope.launch {
+            repository.observeAvailableThemes().collect { themes ->
+                _uiState.update { it.copy(availableThemes = themes) }
+            }
+        }
+        viewModelScope.launch {
             repository.observeBookSources().collect { books ->
                 _uiState.update { state ->
                     state.copy(
@@ -72,6 +77,12 @@ class QuoteViewModel @Inject constructor(
     // --- 3. PUBLIC FUNCTIONS to handle UI events ---
     fun onSearchQueryChange(query: String) {
         _uiState.update { it.copy(filterOptions = it.filterOptions.copy(searchQuery = query)) }
+    }
+
+    fun clearFilters() {
+        _uiState.update {
+            it.copy(filterOptions = QuoteFilterOptions(sortBy = it.filterOptions.sortBy))
+        }
     }
 
     fun onBookSourceChange(uri: String?) {
@@ -264,6 +275,7 @@ class QuoteViewModel @Inject constructor(
 data class QuotesUiState(
     val quotes: List<Quote> = emptyList(),
     val bookSources: List<QuoteBookOption> = emptyList(),
+    val availableThemes: List<String> = emptyList(),
     val filterOptions: QuoteFilterOptions = QuoteFilterOptions(),
     val isLoading: Boolean = false,
     val error: String? = null
