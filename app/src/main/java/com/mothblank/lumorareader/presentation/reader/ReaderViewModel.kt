@@ -102,6 +102,11 @@ class ReaderViewModel @Inject constructor(
                 _uiState.update { it.copy(fontSizeScale = scale) }
             }
         }
+        viewModelScope.launch {
+            userPreferencesRepository.fontFamily.collect { family ->
+                _uiState.update { it.copy(fontFamily = family) }
+            }
+        }
         retryLoading()
     }
     fun setOriginalOrientation(orientation: Int) {
@@ -183,7 +188,13 @@ class ReaderViewModel @Inject constructor(
                     Timber.w(error, "Could not save book history")
                 }
 
-                _uiState.update { it.copy(bookTitle = bookDetails.title, bookAuthor = bookDetails.author) }
+                _uiState.update {
+                    it.copy(
+                        bookTitle = bookDetails.title,
+                        bookAuthor = bookDetails.author,
+                        quoteHighlightText = requestedQuote?.text?.take(2000)
+                    )
+                }
                 val epubReader = bookReader as? EpubBookReader
                 if (epubReader != null) {
                     val chunkCount = epubReader.getChunkCount()
@@ -200,8 +211,17 @@ class ReaderViewModel @Inject constructor(
                         else if (saved?.positionIndex == initialChunk) EpubReadingAnchor.parse(saved?.epubAnchor)
                         else null
                     initialChunkLoaded = false
+                    val contents = epubReader.getTableOfContents()
+                        .filter { (title, section) -> title.isNotBlank() && section in 0 until chunkCount }
+                        .distinct()
                     _uiState.update {
-                        it.copy(bookType = BookType.EPUB, epubChunkCount = chunkCount, currentChunkIndex = initialChunk)
+                        it.copy(
+                            bookType = BookType.EPUB,
+                            epubChunkCount = chunkCount,
+                            currentChunkIndex = initialChunk,
+                            tableOfContents = contents,
+                            readingProgress = (saved?.progress ?: 0f).coerceIn(0f, 1f)
+                        )
                     }
                     if (chunkCount > 0) {
                         loadEpubChunk(initialChunk)
@@ -215,7 +235,9 @@ class ReaderViewModel @Inject constructor(
                     } else 0
                     _uiState.update {
                         it.copy(bookType = BookType.PDF, pdfPageCount = pageCount,
-                            currentPdfPage = initialPage, isLoading = false)
+                            currentPdfPage = initialPage, isLoading = false,
+                            tableOfContents = emptyList(),
+                            readingProgress = if (pageCount > 0) (initialPage + 1f) / pageCount else 0f)
                     }
                     if (pageCount > 0) {
                         loadPdfPage(initialPage)
@@ -239,7 +261,12 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    private fun loadEpubChunk(chunkIndex: Int, themeOverride: LumoraTheme? = null, scaleOverride: Float? = null) {
+    private fun loadEpubChunk(
+        chunkIndex: Int,
+        themeOverride: LumoraTheme? = null,
+        scaleOverride: Float? = null,
+        fontOverride: String? = null
+    ) {
         val epubReader = bookReader as? EpubBookReader ?: return
         if (chunkIndex !in 0 until epubReader.getChunkCount()) return
 
@@ -252,12 +279,14 @@ class ReaderViewModel @Inject constructor(
                 val currentState = uiState.value
                 val currentTheme = themeOverride ?: currentState.theme
                 val currentFontSizeScale = scaleOverride ?: currentState.fontSizeScale
-                val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale"
+                val fontFamily = fontOverride ?: currentState.fontFamily
+                val cacheKey = "$chunkIndex-${currentTheme.name}-$currentFontSizeScale-$fontFamily"
                 val cachedChunk = chunkFileCache[cacheKey] ?: withContext(Dispatchers.IO) {
                     val file = epubReader.generateScrollableHtmlFile(
                         chunkIndex = chunkIndex,
                         fontSizeScale = currentFontSizeScale,
-                        theme = currentTheme
+                        theme = currentTheme,
+                        fontFamily = fontFamily
                     )
                     val authority = "${BuildConfig.APPLICATION_ID}.provider"
                     CachedEpubChunk(FileProvider.getUriForFile(context, authority, file).toString(), file)
@@ -276,7 +305,8 @@ class ReaderViewModel @Inject constructor(
                         try {
                             recentBooksRepository.updateReadingPosition(
                                 uri, uiState.value.currentChunkIndex, currentScrollOffset,
-                                (uiState.value.currentChunkIndex + 1f) / epubReader.getChunkCount(),
+                                (uiState.value.currentChunkIndex +
+                                    (currentEpubAnchor?.fraction ?: 0f)) / epubReader.getChunkCount(),
                                 currentEpubAnchor?.serialize()
                             )
                         } catch (error: Exception) {
@@ -291,7 +321,15 @@ class ReaderViewModel @Inject constructor(
                 ) return@launch
                 initialChunkLoaded = true
                 _uiState.update {
-                    it.copy(isLoading = false, epubFileUri = cachedChunk.uri, currentChunkIndex = chunkIndex)
+                    it.copy(
+                        isLoading = false,
+                        epubFileUri = cachedChunk.uri,
+                        currentChunkIndex = chunkIndex,
+                        readingProgress = (chunkIndex +
+                            (currentEpubAnchor?.fraction ?: 0f)) / epubReader.getChunkCount(),
+                        quoteHighlightText = if (chunkIndex == currentState.currentChunkIndex)
+                            it.quoteHighlightText else null
+                    )
                 }
                 schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
             } catch (cancelled: CancellationException) {
@@ -354,6 +392,16 @@ class ReaderViewModel @Inject constructor(
             }
         }
         chunkFileCache.clear()
+    }
+
+    fun goToEpubChunk(index: Int) {
+        val state = uiState.value
+        if (!state.isEpub || state.isTextSelectionActive || index !in 0 until state.epubChunkCount) return
+        if (index != state.currentChunkIndex) loadEpubChunk(index)
+    }
+
+    fun dismissQuoteHighlight() {
+        _uiState.update { it.copy(quoteHighlightText = null) }
     }
 
     fun nextEpubChunk() {
@@ -524,7 +572,13 @@ class ReaderViewModel @Inject constructor(
             if (index != uiState.value.currentPdfPage) {
                 resetPdfPageZoom()
             }
-            _uiState.update { it.copy(currentPdfPage = index) }
+            _uiState.update {
+                it.copy(
+                    currentPdfPage = index,
+                    readingProgress = (index + 1f) / it.pdfPageCount.coerceAtLeast(1),
+                    quoteHighlightText = if (index == it.currentPdfPage) it.quoteHighlightText else null
+                )
+            }
             schedulePositionSave(index, 0, uiState.value.pdfPageCount)
             prunePdfPageCache(index)
             loadPdfPage(index)
@@ -560,6 +614,16 @@ class ReaderViewModel @Inject constructor(
             // The flow in 'init' will trigger a state update. We just need to reload the chunk.
             if (uiState.value.isEpub) {
                 loadEpubChunk(uiState.value.currentChunkIndex, themeOverride = theme)
+            }
+        }
+    }
+
+    fun onFontFamilyChange(family: String) {
+        if (family !in setOf("Georgia", "Sans", "Mono")) return
+        viewModelScope.launch {
+            userPreferencesRepository.setFontFamily(family)
+            if (uiState.value.isEpub) {
+                loadEpubChunk(uiState.value.currentChunkIndex, fontOverride = family)
             }
         }
     }
@@ -698,6 +762,10 @@ class ReaderViewModel @Inject constructor(
         if (currentScrollOffset == pixelOffset && currentEpubAnchor == anchor) return
         currentScrollOffset = pixelOffset
         currentEpubAnchor = anchor
+        _uiState.update {
+            it.copy(readingProgress = (state.currentChunkIndex + anchor.fraction) /
+                state.epubChunkCount.coerceAtLeast(1))
+        }
         schedulePositionSave(state.currentChunkIndex, pixelOffset, state.epubChunkCount)
     }
 
@@ -708,14 +776,17 @@ class ReaderViewModel @Inject constructor(
     private fun schedulePositionSave(index: Int, offset: Int, total: Int) {
         val uri = currentBookUri ?: return
         if (total <= 0) return
-        val anchor = if (uiState.value.isEpub) currentEpubAnchor?.serialize() else null
+        val isEpub = uiState.value.isEpub
+        val anchor = if (isEpub) currentEpubAnchor?.serialize() else null
+        val progress = if (isEpub) (index + (currentEpubAnchor?.fraction ?: 0f)) / total
+            else (index + 1f) / total
         positionSaveJob?.cancel()
         positionSaveJob = viewModelScope.launch {
             // Collapse frequent WebView scroll callbacks into one database write.
             delay(500)
             try {
                 recentBooksRepository.updateReadingPosition(
-                    uri, index, offset, (index + 1f) / total, anchor
+                    uri, index, offset, progress.coerceIn(0f, 1f), anchor
                 )
             } catch (error: Exception) {
                 Timber.w(error, "Could not persist reading position")
@@ -775,6 +846,10 @@ data class ReaderUiState(
     val isMenuVisible: Boolean = false,
     val theme: LumoraTheme = LumoraTheme.DEFAULT,
     val fontSizeScale: Float = 1.0f,
+    val fontFamily: String = "Georgia",
+    val readingProgress: Float = 0f,
+    val tableOfContents: List<Pair<String, Int>> = emptyList(),
+    val quoteHighlightText: String? = null,
     val epubFileUri: String? = null,
     val epubChunkCount: Int = 1,
     val currentChunkIndex: Int = 0,
@@ -796,4 +871,6 @@ data class ReaderUiState(
     val isEpub: Boolean get() = bookType == BookType.EPUB
     val isPdf: Boolean get() = bookType == BookType.PDF
     val hasMultipleChunks: Boolean get() = epubChunkCount > 1
+    val currentChapterTitle: String? get() =
+        tableOfContents.lastOrNull { it.second <= currentChunkIndex }?.first
 }
