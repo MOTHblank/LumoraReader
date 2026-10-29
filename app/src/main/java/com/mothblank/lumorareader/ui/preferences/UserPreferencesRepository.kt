@@ -28,6 +28,10 @@ class UserPreferencesRepository @Inject constructor(
         val ORIENTATION = intPreferencesKey("orientation")
         val FONT_SIZE_SCALE = floatPreferencesKey("font_size_scale")
         val FONT_FAMILY = stringPreferencesKey("font_family")
+        val EPUB_LINE_SPACING = floatPreferencesKey("epub_line_spacing")
+        val EPUB_MARGIN = stringPreferencesKey("epub_margin")
+        val PDF_NIGHT_MODE = booleanPreferencesKey("pdf_night_mode")
+        val PDF_PAGE_SPACING = intPreferencesKey("pdf_page_spacing_dp")
         val LANGUAGE = stringPreferencesKey("selected_language")
     }
 
@@ -58,6 +62,50 @@ class UserPreferencesRepository @Inject constructor(
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.FONT_SIZE_SCALE] = scale
         }
+    }
+
+    // --- EPUB typography and layout (reflow-safe, retained across launches) ---
+    val epubLineSpacing: Flow<Float> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[PreferencesKeys.EPUB_LINE_SPACING]?.coerceIn(1.4f, 2.2f) ?: 1.7f }
+        .distinctUntilChanged()
+
+    suspend fun setEpubLineSpacing(spacing: Float) {
+        context.dataStore.edit { it[PreferencesKeys.EPUB_LINE_SPACING] = spacing.coerceIn(1.4f, 2.2f) }
+    }
+
+    val epubMargin: Flow<String> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { prefs ->
+            prefs[PreferencesKeys.EPUB_MARGIN]?.takeIf {
+                it in setOf("Compact", "Comfortable", "Wide")
+            } ?: "Comfortable"
+        }
+        .distinctUntilChanged()
+
+    suspend fun setEpubMargin(margin: String) {
+        require(margin in setOf("Compact", "Comfortable", "Wide"))
+        context.dataStore.edit { it[PreferencesKeys.EPUB_MARGIN] = margin }
+    }
+
+    // --- PDF presentation: bitmap cache and native renderer remain unchanged ---
+    val pdfNightMode: Flow<Boolean> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { it[PreferencesKeys.PDF_NIGHT_MODE] ?: false }
+        .distinctUntilChanged()
+
+    suspend fun setPdfNightMode(enabled: Boolean) {
+        context.dataStore.edit { it[PreferencesKeys.PDF_NIGHT_MODE] = enabled }
+    }
+
+    val pdfPageSpacingDp: Flow<Int> = context.dataStore.data
+        .catch { if (it is IOException) emit(emptyPreferences()) else throw it }
+        .map { prefs -> if (prefs[PreferencesKeys.PDF_PAGE_SPACING] == 24) 24 else 8 }
+        .distinctUntilChanged()
+
+    suspend fun setPdfPageSpacingDp(spacingDp: Int) {
+        require(spacingDp == 8 || spacingDp == 24)
+        context.dataStore.edit { it[PreferencesKeys.PDF_PAGE_SPACING] = spacingDp }
     }
 
     // --- Orientation ---
