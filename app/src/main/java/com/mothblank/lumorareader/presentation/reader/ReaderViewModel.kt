@@ -245,8 +245,10 @@ class ReaderViewModel @Inject constructor(
             val anchor = EpubReadingAnchor.parse(quote.epubAnchor)
             val index = anchor?.spineIndex?.takeIf { it >= 0 }
                 ?.let { epub.chunkForSpine(it) } ?: quote.epubChunkIndex ?: return
-            loadEpubChunk(index, targetAnchor = anchor, forceFreshHtml = true)
-            _uiState.update { it.copy(quoteHighlightText = quote.text.take(2000)) }
+            loadEpubChunk(
+                index, targetAnchor = anchor, forceFreshHtml = true,
+                quoteToHighlight = quote.text.take(2000)
+            )
         } else if (state.isPdf) {
             quote.pageNumber?.let { onPdfPageChanged(it - 1) }
             _uiState.update { it.copy(quoteHighlightText = quote.text.take(2000)) }
@@ -390,7 +392,8 @@ class ReaderViewModel @Inject constructor(
         lineSpacingOverride: Float? = null,
         marginOverride: String? = null,
         targetAnchor: EpubReadingAnchor? = null,
-        forceFreshHtml: Boolean = false
+        forceFreshHtml: Boolean = false,
+        quoteToHighlight: String? = null
     ) {
         val epubReader = bookReader as? EpubBookReader ?: return
         if (chunkIndex !in 0 until epubReader.getChunkCount()) return
@@ -462,9 +465,10 @@ class ReaderViewModel @Inject constructor(
                         readingProgress = (chunkIndex +
                             (currentEpubAnchor?.fraction ?: 0f)) / epubReader.getChunkCount(),
                         currentSpineIndex = currentEpubAnchor?.spineIndex ?: -1,
-                        quoteHighlightText = if (targetAnchor != null ||
-                            chunkIndex != currentState.currentChunkIndex
-                        ) null else it.quoteHighlightText
+                        quoteHighlightText = if (quoteToHighlight != null) quoteToHighlight
+                            else if (targetAnchor != null ||
+                                chunkIndex != currentState.currentChunkIndex
+                            ) null else it.quoteHighlightText
                     )
                 }
                 schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
