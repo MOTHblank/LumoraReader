@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="discovery_title">Explore your reading</string>
+    <string name="discovery_search">Search everything</string>
+    <string name="discovery_search_hint">Books, quotations, bookmarks and notes</string>
+    <string name="discovery_books">Books (%1$d)</string>
+    <string name="discovery_quotes">Quotations (%1$d)</string>
+    <string name="discovery_bookmarks">Bookmarks and notes (%1$d)</string>
+    <string name="discovery_open_book">Open book</string>
+    <string name="discovery_saved_location">Saved reading location</string>
+    <string name="discovery_activity">Reading activity</string>
+    <string name="discovery_recent_minutes">Last 7 days: %1$d min</string>
+    <string name="discovery_all_minutes">Recorded total: %1$d min · %2$d sessions</string>
+    <string name="discovery_activity_note">Foreground reader time only. Recorded since this version; not a measure of attention.</string>
+    <string name="discovery_no_results">No matching books, quotes, bookmarks or notes.</string>
+    <string name="discovery_empty_library">Open a book or save a passage to get started.</string>
+    <string name="home_search">Search your library</string>
+    <string name="home_activity_summary">%1$d books · %2$d reading · %3$d min open in the last 7 days</string>
+</resources>
