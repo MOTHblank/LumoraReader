@@ -106,6 +106,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
@@ -143,6 +145,9 @@ internal fun ReadingPositionSelector(
                 style = MaterialTheme.typography.labelMedium)
         }
         Slider(
+            modifier = Modifier.semantics {
+                contentDescription = if (uiState.isPdf) "Jump to page" else "Jump to section"
+            },
             value = selected.coerceIn(0f, (count - 1).toFloat()),
             onValueChange = { selected = it },
             onValueChangeFinished = {
@@ -256,6 +261,8 @@ fun ScrollableReaderSettingsMenu(
                         size = 56.dp,
                         text = "",               // empty = icon-only
                         icon = Icons.Default.Palette,
+                        contentDescription = stringResource(id = theme.aName) +
+                            if (uiState.theme == theme) ", selected theme" else ", theme",
                         color = theme.representativeColor,
                         isSelected = uiState.theme == theme,
                         onClick = { onThemeChange(theme) }
@@ -320,6 +327,7 @@ fun ScrollableReaderSettingsMenu(
                 }
 
                 Slider(
+                    modifier = Modifier.semantics { contentDescription = "Font size" },
                     value = uiState.fontSizeScale,
                     onValueChange = onFontSizeChange,
                     valueRange = 0.8f..2.0f,
@@ -409,6 +417,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.StayCurrentPortrait,
+        contentDescription = "Portrait orientation" +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT) ", selected" else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_PORTRAIT)
             MaterialTheme.colorScheme.primary
         else
@@ -422,6 +432,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.StayCurrentLandscape,
+        contentDescription = "Landscape orientation" +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE) ", selected" else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE)
             MaterialTheme.colorScheme.primary
         else
@@ -435,6 +447,8 @@ fun OrientationButtons(
         size = 56.dp,
         text = "",
         icon = Icons.Default.ScreenRotation,
+        contentDescription = "Automatic orientation" +
+            if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED) ", selected" else "",
         color = if (uiState.orientation == ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED)
             MaterialTheme.colorScheme.primary
         else
