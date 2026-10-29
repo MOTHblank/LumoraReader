@@ -691,7 +691,7 @@ class ReaderViewModel @Inject constructor(
                 val currentState = _uiState.value
                 val currentDate = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.getDefault()).format(Date())
                 // Auto-categorize the theme based on text content
-                val detectedTheme = autoCategorizeTheme(selectedText)
+                val detectedTheme = QuoteThemeClassifier.detect(selectedText)
                 val quote = Quote(
                     text = selectedText,
                     author = currentState.bookAuthor ?: "Unknown Author",
@@ -820,33 +820,6 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    // Enhanced auto-categorization with better keyword matching
-    private val themeKeywords: Map<LumoraTheme, Set<String>> = mapOf(
-        LumoraTheme.GOTH to setOf("dark", "darkness", "night", "shadow", "shadows", "goth", "gothic", "black", "mystery", "mysterious", "moon", "moonlight", "noir", "obscure", "void", "raven", "gloom", "gloomy", "macabre", "death", "melancholy", "somber", "sinister", "haunting", "eerie"),
-        LumoraTheme.COQUETTE to setOf("love", "loving", "pink", "sweet", "sweetness", "coquette", "cute", "adorable", "affection", "darling", "charm", "charming", "flirt", "flirty", "blush", "blushing", "rose", "roses", "kiss", "kisses", "lace", "delicate", "tender", "gentle", "beauty", "beautiful", "pretty"),
-        LumoraTheme.PIRATE to setOf("sea", "ocean", "pirate", "pirates", "adventure", "adventures", "ship", "ships", "treasure", "treasures", "sail", "sailing", "island", "islands", "rum", "captain", "voyage", "voyages", "map", "maps", "parrot", "anchor", "skull", "compass", "storm", "waves", "port", "harbor"),
-        LumoraTheme.NATURE to setOf("nature", "natural", "tree", "trees", "green", "earth", "forest", "forests", "leaf", "leaves", "river", "rivers", "mountain", "mountains", "wild", "wilderness", "flower", "flowers", "meadow", "meadows", "breeze", "wind", "garden", "gardens", "root", "roots", "wood", "woods", "sun", "sunshine", "sky", "cloud", "clouds", "grass", "flora", "fauna"),
-        LumoraTheme.ROMANCE to setOf("romance", "romantic", "rose", "roses", "heart", "hearts", "cupid", "valentine", "sweetheart", "passion", "passionate", "petal", "petals", "embrace", "embracing", "forever", "eternal", "desire", "longing", "beloved", "soulmate", "intimacy", "devotion", "adoration"),
-        LumoraTheme.GRUNGE to setOf("grunge", "grungy", "dirty", "worn", "distressed", "punk", "rebel", "rebellion", "urban", "street", "graffiti", "angst", "angry", "static", "concrete", "rough", "raw", "broken", "torn", "faded", "weathered", "gritty"),
-        LumoraTheme.MYSTIC to setOf("magic", "magical", "mystic", "mystical", "enchantment", "enchanted", "spiritual", "spirit", "aura", "cosmos", "cosmic", "galaxy", "celestial", "dream", "dreams", "fantasy", "esoteric", "oracle", "alchemy", "mysterious", "supernatural", "divine", "transcendent", "ethereal", "astral"),
-        LumoraTheme.CYBER to setOf("cyber", "cybernetic", "tech", "technology", "digital", "code", "coding", "matrix", "neon", "circuit", "circuits", "glitch", "virtual", "hacker", "hackers", "binary", "future", "futuristic", "android", "androids", "synth", "synthetic", "artificial", "robot", "robots", "data", "network"),
-        LumoraTheme.VAMPIRE to setOf("vampire", "vampires", "blood", "bloody", "red", "crimson", "nightmare", "nightmares", "fang", "fangs", "bat", "bats", "scarlet", "immortal", "immortality", "gothic", "bite", "biting", "grave", "graves", "moonlight", "eternal", "undead", "dark", "darkness", "bite", "neck", "thirst")
-    )
-
-    private fun autoCategorizeTheme(text: String): LumoraTheme {
-        // Whole-word matches avoid categorizing unrelated text by a substring.
-        // A quote with no recognized words must retain the default theme.
-        val words = Regex("[\\p{L}\\p{N}]+")
-            .findAll(text.lowercase(Locale.ROOT))
-            .map { it.value }
-            .toSet()
-        return themeKeywords.entries
-            .map { (theme, keywords) -> theme to keywords.count { it in words } }
-            .filter { (_, score) -> score > 0 }
-            .maxByOrNull { (_, score) -> score }
-            ?.first ?: LumoraTheme.DEFAULT
-    }
-
     override fun onCleared() {
         bookOpenJob?.cancel()
         epubChunkJob?.cancel()
@@ -863,46 +836,4 @@ class ReaderViewModel @Inject constructor(
         clearPdfCache()
         super.onCleared()
     }
-}
-
-data class ReaderUiState(
-    val isLoading: Boolean = true,
-    val error: String? = null,
-    val bookType: BookType? = null,
-    val isMenuVisible: Boolean = false,
-    val theme: LumoraTheme = LumoraTheme.DEFAULT,
-    val fontSizeScale: Float = 1.0f,
-    val fontFamily: String = "Georgia",
-    val readingProgress: Float = 0f,
-    val tableOfContents: List<EpubChapter> = emptyList(),
-    val currentSpineIndex: Int = -1,
-    val quoteHighlightText: String? = null,
-    val epubFileUri: String? = null,
-    val epubChunkCount: Int = 1,
-    val currentChunkIndex: Int = 0,
-    val pdfPageCount: Int = 0,
-    val currentPdfPage: Int = 0,
-    val selectedText: String = "",
-    val quoteSaveStatus: String? = null,
-    val orientation: Int = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED,
-    // Book information for quote context
-    val bookTitle: String? = null,
-    val bookAuthor: String? = null,
-    // New state to track if text selection is active
-    val isTextSelectionActive: Boolean = false,
-    // PDF Zoom state
-    val pdfPageZoomScale: Float = 1f,
-    val pdfPageOffsetX: Float = 0f,
-    val pdfPageOffsetY: Float = 0f
-) {
-    val isEpub: Boolean get() = bookType == BookType.EPUB
-    val isPdf: Boolean get() = bookType == BookType.PDF
-    val hasMultipleChunks: Boolean get() = epubChunkCount > 1
-    val currentChapterTitle: String? get() =
-        if (currentSpineIndex >= 0) {
-            tableOfContents.lastOrNull { it.spineIndex <= currentSpineIndex }?.title
-        } else {
-            tableOfContents.firstOrNull { it.chunkIndex == currentChunkIndex }?.title
-                ?: tableOfContents.lastOrNull { it.chunkIndex < currentChunkIndex }?.title
-        }
 }
