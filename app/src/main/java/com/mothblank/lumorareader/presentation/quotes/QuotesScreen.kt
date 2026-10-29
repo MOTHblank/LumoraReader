@@ -109,6 +109,7 @@ fun QuotesScreen(
                 onImport = { importLauncher.launch("application/json") },
                 onShowFilterOptions = { showFilterDialog = true },
                 onShowMoreOptions = { showMoreOptionsDropdown = true },
+                onOpenDiscovery = { navController.navigate("search") },
                 containerColor = lerp(
                     start = MaterialTheme.colorScheme.background.copy(alpha = 0f),
                     stop = MaterialTheme.colorScheme.surface,
