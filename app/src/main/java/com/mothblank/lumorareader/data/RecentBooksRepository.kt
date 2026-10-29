@@ -87,7 +87,8 @@ class RecentBooksRepository @Inject constructor(
                 scrollOffset = previous?.scrollOffset ?: book.scrollOffset,
                 epubAnchor = previous?.epubAnchor ?: book.epubAnchor,
                 isFavorite = previous?.isFavorite ?: book.isFavorite,
-                readingStatus = previous?.readingStatus ?: "READING",
+                readingStatus = previous?.readingStatus
+                    ?: runCatching { book.readingStatus.name }.getOrDefault("READING"),
                 collectionName = previous?.collectionName ?: book.collectionName,
                 coverImageUri = book.coverImageUri ?: previous?.coverImageUri,
                 author = book.author ?: previous?.author,
