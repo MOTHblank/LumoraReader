@@ -10,6 +10,7 @@ import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.BuildConfig
 import com.mothblank.lumorareader.data.EpubBookReader
 import com.mothblank.lumorareader.data.RecentBooksRepository
+import com.mothblank.lumorareader.domain.model.EpubReadingAnchor
 import com.mothblank.lumorareader.domain.model.RecentBook
 import com.mothblank.lumorareader.domain.model.Timestamp
 import com.mothblank.lumorareader.domain.usecase.BookReader
@@ -62,6 +63,7 @@ class ReaderViewModel @Inject constructor(
     private var epubChunkJob: Job? = null
     private var bookOpenJob: Job? = null
     @Volatile private var currentScrollOffset = 0
+    @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
     private var initialChunkLoaded = false
     private var positionSaveJob: Job? = null
     private var currentBookUri: String? = null
@@ -109,6 +111,8 @@ class ReaderViewModel @Inject constructor(
         // Invalidate requests before replacing the reader, even if opening suspends.
         bookOpenJob?.cancel()
         readerGeneration++
+        positionSaveJob?.cancel()
+        currentEpubAnchor = null
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
         pageCache.clear()
@@ -152,6 +156,9 @@ class ReaderViewModel @Inject constructor(
                     currentScrollOffset = if (saved?.positionIndex == initialChunk) {
                         saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
+                    currentEpubAnchor = if (saved?.positionIndex == initialChunk) {
+                        EpubReadingAnchor.parse(saved?.epubAnchor)
+                    } else null
                     initialChunkLoaded = false
                     _uiState.update {
                         it.copy(bookType = BookType.EPUB, epubChunkCount = chunkCount, currentChunkIndex = initialChunk)
@@ -230,13 +237,15 @@ class ReaderViewModel @Inject constructor(
                         try {
                             recentBooksRepository.updateReadingPosition(
                                 uri, uiState.value.currentChunkIndex, currentScrollOffset,
-                                (uiState.value.currentChunkIndex + 1f) / epubReader.getChunkCount()
+                                (uiState.value.currentChunkIndex + 1f) / epubReader.getChunkCount(),
+                                currentEpubAnchor?.serialize()
                             )
                         } catch (error: Exception) {
                             Timber.w(error, "Could not save departing EPUB section")
                         }
                     }
                     currentScrollOffset = 0
+                    currentEpubAnchor = null
                 }
                 if (requestGeneration != epubLoadGeneration ||
                     bookGeneration != readerGeneration || bookReader !== epubReader
@@ -503,18 +512,43 @@ class ReaderViewModel @Inject constructor(
         schedulePositionSave(state.currentChunkIndex, position, state.epubChunkCount)
     }
 
+    /**
+     * Accept location updates only from the currently displayed generated HTML.
+     * The WebView bridge calls this on the UI thread.
+     */
+    fun saveEpubPosition(
+        sourceFileUri: String,
+        pixelOffset: Int,
+        spineIndex: Int,
+        characterOffset: Int,
+        fraction: Float
+    ) {
+        val state = uiState.value
+        if (!state.isEpub || state.isLoading || state.epubFileUri != sourceFileUri ||
+            pixelOffset < 0
+        ) return
+        val anchor = EpubReadingAnchor.create(spineIndex, characterOffset, fraction) ?: return
+        if (currentScrollOffset == pixelOffset && currentEpubAnchor == anchor) return
+        currentScrollOffset = pixelOffset
+        currentEpubAnchor = anchor
+        schedulePositionSave(state.currentChunkIndex, pixelOffset, state.epubChunkCount)
+    }
+
+    fun getEpubAnchor(): EpubReadingAnchor? = currentEpubAnchor
+
     fun getScrollPosition(): Int = currentScrollOffset
 
     private fun schedulePositionSave(index: Int, offset: Int, total: Int) {
         val uri = currentBookUri ?: return
         if (total <= 0) return
+        val anchor = if (uiState.value.isEpub) currentEpubAnchor?.serialize() else null
         positionSaveJob?.cancel()
         positionSaveJob = viewModelScope.launch {
             // Collapse frequent WebView scroll callbacks into one database write.
             delay(500)
             try {
                 recentBooksRepository.updateReadingPosition(
-                    uri, index, offset, (index + 1f) / total
+                    uri, index, offset, (index + 1f) / total, anchor
                 )
             } catch (error: Exception) {
                 Timber.w(error, "Could not persist reading position")
