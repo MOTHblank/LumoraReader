@@ -178,6 +178,26 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     uiState.isPdf -> PdfScrollReader(viewModel)
                 }
 
+                // Explicit menu entry is accessible without a touch gesture.
+                // Retain tap-to-menu for sighted readers, but do not depend on it.
+                if (!uiState.isLoading && (uiState.isEpub || uiState.isPdf) &&
+                    !uiState.isMenuVisible
+                ) {
+                    FilledTonalIconButton(
+                        onClick = { viewModel.onToggleMenuVisibility() },
+                        enabled = !uiState.isTextSelectionActive,
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp)
+                            .size(48.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Settings,
+                            contentDescription = "Reader settings and navigation"
+                        )
+                    }
+                }
+
                 // Show save status message (centered, above other elements)
                 uiState.quoteSaveStatus?.let { status ->
                     Card(
