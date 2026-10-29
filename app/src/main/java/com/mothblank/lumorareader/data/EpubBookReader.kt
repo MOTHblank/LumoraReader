@@ -217,7 +217,8 @@ class EpubBookReader(
     suspend fun generateScrollableHtmlFile(
         chunkIndex: Int,
         fontSizeScale: Float,
-        theme: LumoraTheme
+        theme: LumoraTheme,
+        fontFamily: String = "Georgia"
     ): File = withContext(Dispatchers.IO) {
         if (chunkIndex !in chunkedSpine.indices) throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, chunkIndex))
 
@@ -230,7 +231,12 @@ class EpubBookReader(
             // Spine indices survive CSS/font changes and regenerations of HTML.
             """<section data-lumora-spine="$spineIndex">${getChapterContent(spineIndex)}</section>"""
         }
-        val fontSizeEm = 1.0f * fontSizeScale
+        val fontSizeEm = fontSizeScale.coerceIn(0.8f, 2f)
+        val fontStack = when (fontFamily) {
+            "Sans" -> "system-ui, Roboto, sans-serif"
+            "Mono" -> "monospace"
+            else -> "Georgia, 'Noto Serif', serif"
+        }
 
         val bgHex = backgroundColor.toHex()
         val textHex = textColor.toHex()
@@ -247,16 +253,24 @@ class EpubBookReader(
             <style>
                 html { -webkit-text-size-adjust: 100%; }
                 body {
-                    margin: 0; padding: 20px; font-family: Georgia, serif;
-                    line-height: 1.6; font-size: ${fontSizeEm}em;
-                    max-width: 800px; margin: 0 auto;
-                    text-align: justify;
+                    padding: clamp(18px, 5vw, 48px);
+                    font-family: $fontStack !important;
+                    line-height: 1.72; font-size: ${fontSizeEm}em;
+                    max-width: 68ch; margin: 0 auto;
+                    text-align: start;
                     overflow-x: hidden;
-                    word-wrap: break-word;
+                    overflow-wrap: break-word;
+                    hyphens: auto;
+                    -webkit-font-smoothing: antialiased;
                     background-color: $bgHex !important;
                     color: $textHex !important;
                 }
-                .chapter-break { border: none; border-top: 1px solid $textHex; opacity: 0.5; margin: 40px 0; }
+                p { margin-block: 0 1.05em; }
+                h1, h2, h3 { line-height: 1.24; text-wrap: balance; margin: 1.35em 0 0.65em; }
+                blockquote { border-inline-start: 3px solid $textHex; padding-inline-start: 1em; margin-inline: 0; }
+                pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
+                .chapter-break { border: none; border-top: 1px solid $textHex; opacity: 0.35; margin: 2.8em 0; }
+                ::highlight(lumora-return-passage) { background: rgba(250, 184, 57, 0.45); }
                 img { max-width: 100%; height: auto; display: block; margin: 1em 0; }
                 a { color: $textHex; text-decoration: underline; }
                 /* Override any existing colors to match theme */
@@ -266,7 +280,7 @@ class EpubBookReader(
 
         val finalHtml = """
         <!DOCTYPE html>
-        <html>
+        <html lang="en">
         <head>
             <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
             <meta charset="utf-8">
