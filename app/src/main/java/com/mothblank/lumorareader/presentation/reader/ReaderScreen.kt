@@ -1,5 +1,6 @@
 package com.mothblank.lumorareader.presentation.reader
 
+import androidx.activity.compose.BackHandler
 import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.Intent
@@ -132,6 +133,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val context = LocalContext.current
     var showBookInfo by remember { mutableStateOf(false) }
     var showContents by remember { mutableStateOf(false) }
+    BackHandler(enabled = uiState.focusMode) { viewModel.setFocusMode(false) }
     val shareBook: () -> Unit = {
         val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
         val author = uiState.bookAuthor?.takeIf { it.isNotBlank() }
@@ -183,18 +185,27 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                 if (!uiState.isLoading && (uiState.isEpub || uiState.isPdf) &&
                     !uiState.isMenuVisible
                 ) {
-                    FilledTonalIconButton(
-                        onClick = { viewModel.onToggleMenuVisibility() },
-                        enabled = !uiState.isTextSelectionActive,
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(12.dp)
-                            .size(48.dp)
-                    ) {
-                        Icon(
-                            Icons.Default.Settings,
-                            contentDescription = stringResource(R.string.reader_settings_navigation)
-                        )
+                    if (uiState.focusMode) {
+                        // Remains keyboard and TalkBack accessible while all
+                        // ordinary reading chrome is hidden.
+                        TextButton(
+                            onClick = { viewModel.setFocusMode(false) },
+                            modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
+                        ) { Text(stringResource(R.string.reader_exit_focus_mode)) }
+                    } else {
+                        FilledTonalIconButton(
+                            onClick = { viewModel.onToggleMenuVisibility() },
+                            enabled = !uiState.isTextSelectionActive,
+                            modifier = Modifier
+                                .align(Alignment.TopEnd)
+                                .padding(12.dp)
+                                .size(48.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.Settings,
+                                contentDescription = stringResource(R.string.reader_settings_navigation)
+                            )
+                        }
                     }
                 }
 
@@ -225,7 +236,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
 
                 // Location indicator that never covers selected-text actions.
                 if (!uiState.isLoading && (uiState.isEpub || uiState.isPdf) &&
-                    uiState.selectedText.isBlank() && !uiState.isMenuVisible
+                    uiState.selectedText.isBlank() && !uiState.isMenuVisible && !uiState.focusMode
                 ) {
                     Surface(
                         modifier = Modifier.align(Alignment.BottomCenter)
@@ -276,7 +287,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                 }
 
                 uiState.quoteHighlightText?.let { passage ->
-                    if (!uiState.isLoading) {
+                    if (!uiState.isLoading && !uiState.focusMode) {
                         Surface(
                             modifier = Modifier.align(Alignment.TopCenter)
                                 .fillMaxWidth().padding(12.dp),
@@ -502,6 +513,11 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             onThemeChange = { viewModel.onThemeChange(it) },
                             onFontSizeChange = { viewModel.onFontSizeChange(it) },
                             onFontFamilyChange = { viewModel.onFontFamilyChange(it) },
+                            onLineSpacingChange = { viewModel.onEpubLineSpacingChange(it) },
+                            onMarginChange = { viewModel.onEpubMarginChange(it) },
+                            onPdfNightModeChange = { viewModel.onPdfNightModeChange(it) },
+                            onPdfPageSpacingChange = { viewModel.onPdfPageSpacingChange(it) },
+                            onEnterFocusMode = { viewModel.setFocusMode(true) },
                             onOrientationChange = { viewModel.onOrientationChange(it) },
                             onRefresh = { viewModel.retryLoading() },
                             onShare = shareBook,
