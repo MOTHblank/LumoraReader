@@ -117,6 +117,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.mothblank.lumorareader.R
 import com.mothblank.lumorareader.domain.model.Page
+import com.mothblank.lumorareader.data.EpubChapter
 import com.mothblank.lumorareader.presentation.home.components.InteractiveBubble
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 import com.mothblank.lumorareader.ui.theme.representativeColor
@@ -473,30 +474,34 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
         }
         if (showContents) {
             val entries = uiState.tableOfContents.takeIf { it.isNotEmpty() }
-                ?: (0 until uiState.epubChunkCount).map { "Section ${it + 1}" to it }
+                ?: (0 until uiState.epubChunkCount).map {
+                    EpubChapter("Section ${it + 1}", it, -1)
+                }
             AlertDialog(
                 onDismissRequest = { showContents = false },
                 title = { Text("Table of contents") },
                 text = {
                     LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
                         items(entries.size) { i ->
-                            val (label, section) = entries[i]
+                            val chapter = entries[i]
                             TextButton(
                                 onClick = {
-                                    viewModel.goToEpubChunk(section)
+                                    if (chapter.spineIndex >= 0)
+                                        viewModel.goToEpubChapter(chapter.spineIndex)
+                                    else viewModel.goToEpubChunk(chapter.chunkIndex)
                                     showContents = false
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Text(
-                                    text = label,
+                                    text = chapter.title,
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Start,
-                                    color = if (section == uiState.currentChunkIndex)
+                                    color = if (chapter.chunkIndex == uiState.currentChunkIndex)
                                         MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface
                                 )
-                                Text("${section + 1}")
+                                Text("${chapter.chunkIndex + 1}")
                             }
                         }
                     }
@@ -1277,7 +1282,7 @@ private fun generateJsBundle(): String = """
                 range.setStart(startNode, startOffset);
                 range.setEnd(endNode, endOffset);
             } catch (_) { return; }
-            const normalize = s => s.replace(/\\s+/g, ' ').trim();
+            const normalize = s => s.replace(/\s+/g, ' ').trim();
             if (!normalize(range.toString()).startsWith(normalize(text).slice(0, 24))) return;
             if (window.CSS?.highlights && window.Highlight) {
                 CSS.highlights.set('lumora-return-passage', new Highlight(range));
