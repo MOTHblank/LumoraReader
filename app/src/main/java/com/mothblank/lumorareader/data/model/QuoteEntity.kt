@@ -20,5 +20,9 @@ data class QuoteEntity(
     val bookTitle: String? = null,
     val bookAuthor: String? = null,
     val pageNumber: Int? = null,
-    val chapterTitle: String? = null
+    val chapterTitle: String? = null,
+    val sourceUri: String? = null,
+    val epubChunkIndex: Int? = null,
+    val epubAnchor: String? = null,
+    val note: String? = null
 )
