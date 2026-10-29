@@ -303,6 +303,8 @@ fun ScrollableReaderSettingsMenu(
         HorizontalDivider()
 
         if (uiState.isEpub) {
+        Text(stringResource(R.string.reader_typography_section),
+            style = MaterialTheme.typography.titleMedium)
         // Reading typography. Sliders commit on release to avoid generating
         // a new EPUB WebView for every pointer movement.
         var pendingFontSize by remember(uiState.fontSizeScale) {
@@ -411,8 +413,6 @@ fun ScrollableReaderSettingsMenu(
                 var pendingLineSpacing by remember(uiState.epubLineSpacing) {
                     mutableStateOf(uiState.epubLineSpacing)
                 }
-                Text(stringResource(R.string.reader_typography_section),
-                    style = MaterialTheme.typography.titleMedium)
                 val formattedSpacing = String.format(
                     java.util.Locale.getDefault(), "%.1f", pendingLineSpacing
                 )
