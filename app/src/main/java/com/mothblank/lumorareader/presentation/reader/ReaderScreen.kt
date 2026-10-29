@@ -1483,7 +1483,7 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
             userScrollEnabled = uiState.pdfPageZoomScale <= 1.01f,
             flingBehavior = ScrollableDefaults.flingBehavior(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 8.dp)
+            contentPadding = PaddingValues(top = 8.dp, bottom = 72.dp)
         ) {
             items(
                 count = uiState.pdfPageCount,
