@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="quote_show_more">Show more</string>
+    <string name="quote_show_less">Show less</string>
+    <string name="quote_note_label">Note: %1$s</string>
+    <string name="quote_jump_to_passage">Jump to passage</string>
+    <string name="quotes_active_filters">Filters (%1$d)</string>
+    <string name="quotes_clear_filters">Clear filters</string>
+    <string name="quotes_no_filter_results">No quotations match these filters.</string>
+    <string name="reader_quick_actions">Quick actions</string>
+    <string name="reader_reload_book">Reload book</string>
+    <string name="reader_share_book">Share book</string>
+    <string name="reader_book_information">Book information</string>
+    <string name="library_read_short">Read</string>
+    <string name="library_edit_short">Edit</string>
+</resources>
