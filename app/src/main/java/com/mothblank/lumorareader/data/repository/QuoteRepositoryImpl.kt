@@ -3,6 +3,7 @@ package com.mothblank.lumorareader.data.repository
 import com.mothblank.lumorareader.data.db.dao.QuoteDao
 import com.mothblank.lumorareader.data.model.QuoteEntity
 import com.mothblank.lumorareader.domain.model.Quote
+import com.mothblank.lumorareader.domain.model.QuoteBookOption
 import com.mothblank.lumorareader.domain.repository.QuoteRepository
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -14,11 +15,13 @@ class QuoteRepositoryImpl @Inject constructor(
     private val dao: QuoteDao
 ) : QuoteRepository {
 
-    override fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String): Flow<List<Quote>> {
-        return dao.getFilteredQuotes(query, theme, starred, sortBy).map { entities ->
+    override fun getFilteredQuotes(query: String, theme: String?, starred: Boolean?, sortBy: String, sourceUri: String?): Flow<List<Quote>> {
+        return dao.getFilteredQuotes(query, theme, starred, sortBy, sourceUri).map { entities ->
             entities.map { it.toDomainModel() }
         }
     }
+
+    override fun observeBookSources(): Flow<List<QuoteBookOption>> = dao.observeBookSources()
 
     override fun observeForBook(uri: String): Flow<List<Quote>> =
         dao.observeForBook(uri).map { entries -> entries.map { it.toDomainModel() } }
