@@ -102,3 +102,15 @@ val MIGRATION_6_7 = object : Migration(6, 7) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_bookmarks_bookUri ON reading_bookmarks (bookUri)")
     }
 }
+
+/**
+ * Preserve saved EPUB anchors, PDF locations and existing books while adding
+ * explicit library organization fields. Opened books default to READING.
+ */
+val MIGRATION_7_8 = object : Migration(7, 8) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("ALTER TABLE reading_history ADD COLUMN isFavorite INTEGER NOT NULL DEFAULT 0")
+        db.execSQL("ALTER TABLE reading_history ADD COLUMN readingStatus TEXT NOT NULL DEFAULT 'READING'")
+        db.execSQL("ALTER TABLE reading_history ADD COLUMN collectionName TEXT")
+    }
+}
