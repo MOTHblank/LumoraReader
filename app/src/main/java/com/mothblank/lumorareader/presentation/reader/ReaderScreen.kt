@@ -47,6 +47,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.FormatQuote
 import androidx.compose.material.icons.filled.FormatSize
@@ -133,6 +134,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
     val context = LocalContext.current
     var showBookInfo by remember { mutableStateOf(false) }
     var showContents by remember { mutableStateOf(false) }
+    var showNotebook by remember { mutableStateOf(false) }
     BackHandler(enabled = uiState.focusMode) { viewModel.setFocusMode(false) }
     val shareBook: () -> Unit = {
         val title = uiState.bookTitle?.takeIf { it.isNotBlank() } ?: "Untitled book"
@@ -193,18 +195,30 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             modifier = Modifier.align(Alignment.TopEnd).padding(8.dp)
                         ) { Text(stringResource(R.string.reader_exit_focus_mode)) }
                     } else {
-                        FilledTonalIconButton(
-                            onClick = { viewModel.onToggleMenuVisibility() },
-                            enabled = !uiState.isTextSelectionActive,
-                            modifier = Modifier
-                                .align(Alignment.TopEnd)
-                                .padding(12.dp)
-                                .size(48.dp)
+                        Row(
+                            modifier = Modifier.align(Alignment.TopEnd).padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
-                            Icon(
-                                Icons.Default.Settings,
-                                contentDescription = stringResource(R.string.reader_settings_navigation)
-                            )
+                            FilledTonalIconButton(
+                                onClick = { showNotebook = true },
+                                enabled = !uiState.isTextSelectionActive,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Book,
+                                    contentDescription = stringResource(R.string.reader_notebook_open)
+                                )
+                            }
+                            FilledTonalIconButton(
+                                onClick = { viewModel.onToggleMenuVisibility() },
+                                enabled = !uiState.isTextSelectionActive,
+                                modifier = Modifier.size(48.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Settings,
+                                    contentDescription = stringResource(R.string.reader_settings_navigation)
+                                )
+                            }
                         }
                     }
                 }
@@ -437,6 +451,15 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                     contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
+                    item {
+                        OutlinedButton(
+                            onClick = {
+                                showNotebook = true
+                                viewModel.onToggleMenuVisibility()
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text(stringResource(R.string.reader_notebook_open)) }
+                    }
                     if (uiState.isEpub) {
                         item {
                             OutlinedButton(
@@ -527,6 +550,17 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     }
                 }
             }
+        }
+        if (showNotebook) {
+            BookNotebookDialog(
+                state = uiState,
+                onDismiss = { showNotebook = false },
+                onAddBookmark = { label, note -> viewModel.addBookmark(label, note) },
+                onEditBookmark = { id, label, note -> viewModel.editBookmark(id, label, note) },
+                onDeleteBookmark = { id -> viewModel.deleteBookmark(id) },
+                onJumpBookmark = { bookmark -> viewModel.goToBookmark(bookmark) },
+                onJumpQuote = { quote -> viewModel.goToNotebookQuote(quote) }
+            )
         }
         if (showContents) {
             val entries = uiState.tableOfContents.takeIf { it.isNotEmpty() }
