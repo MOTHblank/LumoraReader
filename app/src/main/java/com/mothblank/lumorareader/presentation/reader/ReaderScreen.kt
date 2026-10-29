@@ -200,6 +200,67 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     }
                 }
 
+                // Location indicator that never covers selected-text actions.
+                if (!uiState.isLoading && (uiState.isEpub || uiState.isPdf) &&
+                    uiState.selectedText.isBlank() && !uiState.isMenuVisible
+                ) {
+                    Surface(
+                        modifier = Modifier.align(Alignment.BottomCenter)
+                            .fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.94f),
+                        tonalElevation = 2.dp
+                    ) {
+                        Column(modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp)) {
+                            Row(modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.SpaceBetween) {
+                                Text(
+                                    text = if (uiState.isEpub)
+                                        uiState.currentChapterTitle ?: "Section ${uiState.currentChunkIndex + 1}"
+                                    else "Page ${uiState.currentPdfPage + 1} / ${uiState.pdfPageCount}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    maxLines = 1,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                Text("${(uiState.readingProgress.coerceIn(0f, 1f) * 100).roundToInt()}%",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary)
+                            }
+                            Spacer(Modifier.height(4.dp))
+                            LinearProgressIndicator(
+                                progress = { uiState.readingProgress.coerceIn(0f, 1f) },
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
+                }
+
+                uiState.quoteHighlightText?.let { passage ->
+                    if (!uiState.isLoading) {
+                        Surface(
+                            modifier = Modifier.align(Alignment.TopCenter)
+                                .fillMaxWidth().padding(12.dp),
+                            shape = RoundedCornerShape(14.dp),
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            tonalElevation = 3.dp
+                        ) {
+                            Row(modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Default.FormatQuote, contentDescription = null)
+                                Spacer(Modifier.width(8.dp))
+                                Text(
+                                    passage, modifier = Modifier.weight(1f),
+                                    maxLines = 2, style = MaterialTheme.typography.bodySmall
+                                )
+                                TextButton(onClick = { viewModel.dismissQuoteHighlight() }) {
+                                    Text("Dismiss")
+                                }
+                            }
+                        }
+                    }
+                }
+
                 // Enhanced selected text preview and quote options with interactive bubbles
                 AnimatedVisibility(
                     visible = uiState.selectedText.isNotBlank(),
@@ -324,6 +385,30 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                     verticalArrangement = Arrangement.spacedBy(20.dp),
                     contentPadding = PaddingValues(vertical = 16.dp)
                 ) {
+                    if (uiState.isEpub) {
+                        item {
+                            OutlinedButton(
+                                onClick = {
+                                    showContents = true
+                                    viewModel.onToggleMenuVisibility()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Contents · ${uiState.currentChapterTitle ?: "Browse chapters"}")
+                            }
+                        }
+                    }
+                    if ((uiState.isEpub && uiState.epubChunkCount > 1) ||
+                        (uiState.isPdf && uiState.pdfPageCount > 1)
+                    ) {
+                        item {
+                            ReadingPositionSelector(
+                                uiState = uiState,
+                                onEpubSeek = { viewModel.goToEpubChunk(it) },
+                                onPdfSeek = { viewModel.onPdfPageChanged(it) }
+                            )
+                        }
+                    }
                     // Add navigation bar based on book type
                     if (uiState.isEpub && uiState.hasMultipleChunks) {
                         item {
@@ -386,6 +471,41 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                 }
             }
         }
+        if (showContents) {
+            val entries = uiState.tableOfContents.takeIf { it.isNotEmpty() }
+                ?: (0 until uiState.epubChunkCount).map { "Section ${it + 1}" to it }
+            AlertDialog(
+                onDismissRequest = { showContents = false },
+                title = { Text("Table of contents") },
+                text = {
+                    LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 460.dp)) {
+                        items(entries.size) { i ->
+                            val (label, section) = entries[i]
+                            TextButton(
+                                onClick = {
+                                    viewModel.goToEpubChunk(section)
+                                    showContents = false
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text(
+                                    text = label,
+                                    modifier = Modifier.weight(1f),
+                                    textAlign = TextAlign.Start,
+                                    color = if (section == uiState.currentChunkIndex)
+                                        MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.onSurface
+                                )
+                                Text("${section + 1}")
+                            }
+                        }
+                    }
+                },
+                confirmButton = {
+                    TextButton(onClick = { showContents = false }) { Text("Close") }
+                }
+            )
+        }
         if (showBookInfo) {
             val format = when {
                 uiState.isPdf -> "PDF"
@@ -414,6 +534,36 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
         }
     }
 }
+@Composable
+private fun ReadingPositionSelector(
+    uiState: ReaderUiState,
+    onEpubSeek: (Int) -> Unit,
+    onPdfSeek: (Int) -> Unit
+) {
+    val count = if (uiState.isPdf) uiState.pdfPageCount else uiState.epubChunkCount
+    if (count < 2) return
+    val index = if (uiState.isPdf) uiState.currentPdfPage else uiState.currentChunkIndex
+    var selected by remember(uiState.bookType, index) { mutableStateOf(index.toFloat()) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween) {
+            Text(if (uiState.isPdf) "Jump to page" else "Jump to section",
+                style = MaterialTheme.typography.titleSmall)
+            Text("${selected.roundToInt() + 1} / $count",
+                style = MaterialTheme.typography.labelMedium)
+        }
+        Slider(
+            value = selected.coerceIn(0f, (count - 1).toFloat()),
+            onValueChange = { selected = it },
+            onValueChangeFinished = {
+                val target = selected.roundToInt().coerceIn(0, count - 1)
+                if (uiState.isPdf) onPdfSeek(target) else onEpubSeek(target)
+            },
+            valueRange = 0f..(count - 1).toFloat()
+        )
+    }
+}
+
 @Composable
 fun ScrollableReaderSettingsMenu(
     uiState: ReaderUiState,
