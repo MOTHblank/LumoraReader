@@ -79,6 +79,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -803,112 +804,106 @@ fun PdfPageNavigationBar(
 fun EpubScrollReader(viewModel: ReaderViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val fileUri = uiState.epubFileUri
-    var webView by remember { mutableStateOf<WebView?>(null) }
-    var contentLoaded by remember { mutableStateOf(false) }
-
     val jsBundle = remember { generateJsBundle() }
 
     if (fileUri != null) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            AndroidView(
-                modifier = Modifier.fillMaxSize(),
-                factory = { context ->
-                    WebView(context).apply {
-                        settings.javaScriptEnabled = true
-                        
-                        // Security Hardening: Disable content:// access as all assets are loaded locally via file://
-                        settings.allowContentAccess = false
-                        
-                        // Security Hardening: Explicitly block cross-file access from file context to prevent local file leaks
-                        settings.allowFileAccess = true
-                        @Suppress("DEPRECATION")
-                        settings.allowFileAccessFromFileURLs = false
-                        @Suppress("DEPRECATION")
-                        settings.allowUniversalAccessFromFileURLs = false
-                        
-                        // Security Hardening: Enable Safe Browsing protection against malicious links (API 26+)
-                        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
-                            settings.safeBrowsingEnabled = true
-                        }
+        // Recreate the AndroidView when a generated HTML URL changes. Updating
+        // the old WebView's selection flag alone cannot display a new section.
+        key(fileUri) {
+            var webView by remember { mutableStateOf<WebView?>(null) }
+            Box(modifier = Modifier.fillMaxSize()) {
+                AndroidView(
+                    modifier = Modifier.fillMaxSize(),
+                    factory = { context ->
+                        WebView(context).apply {
+                            val activeView = this
+                            settings.javaScriptEnabled = true
+                            settings.allowContentAccess = false
+                            settings.allowFileAccess = true
+                            @Suppress("DEPRECATION")
+                            settings.allowFileAccessFromFileURLs = false
+                            @Suppress("DEPRECATION")
+                            settings.allowUniversalAccessFromFileURLs = false
+                            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.O) {
+                                settings.safeBrowsingEnabled = true
+                            }
+                            settings.domStorageEnabled = true
+                            isVerticalScrollBarEnabled = true
+                            settings.builtInZoomControls = true
+                            settings.displayZoomControls = false
+                            settings.setSupportZoom(true)
 
-                        settings.domStorageEnabled = true
-                        isVerticalScrollBarEnabled = true
-                        settings.builtInZoomControls = true
-                        settings.displayZoomControls = false
-                        settings.setSupportZoom(true)
+                            addJavascriptInterface(object : Any() {
+                                @JavascriptInterface
+                                fun saveEpubPosition(pixelOffset: Int, spineIndex: Int, characterOffset: Int, fraction: Float) {
+                                    activeView.post {
+                                        viewModel.saveEpubPosition(fileUri, pixelOffset, spineIndex, characterOffset, fraction)
+                                    }
+                                }
+                                @JavascriptInterface
+                                fun onScrollNearBottom() {
+                                    activeView.post { viewModel.onScrollNearEndOfSection() }
+                                }
+                                @JavascriptInterface
+                                fun onContentLoaded() = Unit
+                                @JavascriptInterface
+                                fun onTap() {
+                                    activeView.post { viewModel.onToggleMenuVisibility() }
+                                }
+                            }, "AndroidInterface")
 
-                        // Add JS interface with onTap
-                        addJavascriptInterface(object : Any() {
-                            @JavascriptInterface
-                            fun saveScrollPosition(pos: Int) {
-                                if (webView != null) viewModel.saveScrollPosition(pos)
-                            }
-                            @JavascriptInterface
-                            fun onScrollNearBottom() {
-                                viewModel.onScrollNearEndOfSection()
-                            }
-                            @JavascriptInterface
-                            fun onContentLoaded() {
-                                contentLoaded = true
-                            }
-                            @JavascriptInterface
-                            fun onTap() {
-                                viewModel.onToggleMenuVisibility()
-                            }
-                        }, "AndroidInterface")
+                            addJavascriptInterface(object : Any() {
+                                @JavascriptInterface
+                                fun onTextSelected(text: String) {
+                                    activeView.post { viewModel.onTextSelected(text) }
+                                }
+                                @JavascriptInterface
+                                fun onSelectionCleared() {
+                                    activeView.post { viewModel.clearTextSelection() }
+                                }
+                            }, "AndroidSelectionInterface")
 
-                        addJavascriptInterface(object : Any() {
-                            @JavascriptInterface
-                            fun onTextSelected(text: String) {
-                                viewModel.onTextSelected(text)
-                            }
-                            @JavascriptInterface
-                            fun onSelectionCleared() {
-                                viewModel.clearTextSelection()
-                            }
-                        }, "AndroidSelectionInterface")
-
-                        webViewClient = object : WebViewClient() {
-                            override fun onPageStarted(v: WebView?, u: String?, fav: Bitmap?) {
-                                super.onPageStarted(v, u, fav)
-                                contentLoaded = false
-                            }
-                            override fun onPageFinished(v: WebView?, u: String?) {
-                                v?.let { web ->
-                                    web.evaluateJavascript(jsBundle) {
-                                        restoreScrollPosition(web, viewModel.getScrollPosition())
+                            webViewClient = object : WebViewClient() {
+                                override fun onPageFinished(v: WebView?, u: String?) {
+                                    if (v == null || u != fileUri) return
+                                    v.evaluateJavascript(jsBundle) {
+                                        val anchor = viewModel.getEpubAnchor()
+                                        val command = "window.lumoraRestorePosition(" +
+                                            (anchor?.spineIndex ?: -1) + "," +
+                                            (anchor?.characterOffset ?: 0) + "," +
+                                            (anchor?.fraction ?: -1f) + "," +
+                                            viewModel.getScrollPosition() + ");"
+                                        v.evaluateJavascript(command, null)
                                     }
                                 }
                             }
+                            webView = this
+                            loadUrl(fileUri)
                         }
-
-                        webView = this
-                        loadUrl(fileUri)
+                    },
+                    update = { wv ->
+                        wv.evaluateJavascript(
+                            "window.isTextSelectionActive = " + uiState.isTextSelectionActive + ";", null
+                        )
                     }
-                },
-                update = { wv ->
-                    webView = wv
-                    wv.evaluateJavascript("window.isTextSelectionActive = ${uiState.isTextSelectionActive};", null)
+                )
+            }
+            DisposableEffect(fileUri) {
+                viewModel.onEpubWebViewAttached(fileUri)
+                onDispose {
+                    webView?.let { w ->
+                        w.stopLoading()
+                        w.loadUrl("about:blank")
+                        w.removeAllViews()
+                        w.destroy()
+                    }
+                    webView = null
+                    viewModel.onEpubWebViewReleased(fileUri)
                 }
-            )
+            }
         }
     } else if (uiState.isLoading) {
         LoadingView()
-    }
-
-    // Release the old generated HTML only after its WebView has been destroyed.
-    DisposableEffect(fileUri) {
-        if (fileUri != null) viewModel.onEpubWebViewAttached(fileUri)
-        onDispose {
-            webView?.let { w ->
-                w.stopLoading()
-                w.loadUrl("about:blank")
-                w.removeAllViews()
-                w.destroy()
-            }
-            webView = null
-            if (fileUri != null) viewModel.onEpubWebViewReleased(fileUri)
-        }
     }
 }
 
