@@ -138,6 +138,9 @@ fun PdfPageNavigationBar(
 ) {
     var showPageDialog by remember { mutableStateOf(false) }
     var pageInput by remember { mutableStateOf("") }
+    val pageActionDescription = stringResource(
+        R.string.reader_go_to_page_accessibility, currentPage, totalPages
+    )
 
     Surface(
         modifier = Modifier.fillMaxWidth(),
@@ -178,7 +181,7 @@ fun PdfPageNavigationBar(
                     containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 ),
                 modifier = Modifier.clickable { showPageDialog = true }
-                    .semantics { contentDescription = "Go to page, currently $currentPage of $totalPages" }
+                    .semantics { contentDescription = pageActionDescription }
             ) {
                 Text(
                     text = "Page $currentPage of $totalPages",
@@ -361,6 +364,9 @@ fun PdfPageItem(
     screenWidth: Dp,
     viewModel: ReaderViewModel
 ) {
+    val pageA11yDescription = stringResource(
+        R.string.reader_pdf_page_accessibility, pageIndex + 1
+    )
     // A page that was evicted from the byte-bounded LRU can load again when
     // it becomes visible, without eagerly rendering the entire document.
     LaunchedEffect(pageIndex, page) {
@@ -384,7 +390,7 @@ fun PdfPageItem(
                         modifier = Modifier
                             .fillMaxSize()
                             .semantics {
-                                contentDescription = "PDF page ${pageIndex + 1}"
+                                contentDescription = pageA11yDescription
                             }
                             .pointerInput(pageIndex, isCurrentPage) {
                                 if (!isCurrentPage) return@pointerInput
@@ -464,7 +470,7 @@ fun PdfPageItem(
                                 enabled = zoom > 1.01f,
                                 modifier = Modifier.size(48.dp)
                             ) {
-                                Icon(Icons.Default.Remove, contentDescription = "Zoom out PDF")
+                                Icon(Icons.Default.Remove, contentDescription = stringResource(R.string.reader_zoom_out_pdf))
                             }
                             if (zoom > 1.01f) {
                                 TextButton(
@@ -483,7 +489,7 @@ fun PdfPageItem(
                                 enabled = zoom < 3.99f,
                                 modifier = Modifier.size(48.dp)
                             ) {
-                                Icon(Icons.Default.Add, contentDescription = "Zoom in PDF")
+                                Icon(Icons.Default.Add, contentDescription = stringResource(R.string.reader_zoom_in_pdf))
                             }
                         }
                     }
