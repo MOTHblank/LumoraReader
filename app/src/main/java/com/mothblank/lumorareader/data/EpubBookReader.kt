@@ -224,7 +224,9 @@ class EpubBookReader(
         chunkIndex: Int,
         fontSizeScale: Float,
         theme: LumoraTheme,
-        fontFamily: String = "Georgia"
+        fontFamily: String = "Georgia",
+        lineSpacing: Float = 1.7f,
+        pageMargin: String = "Comfortable"
     ): File = withContext(Dispatchers.IO) {
         if (chunkIndex !in chunkedSpine.indices) throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, chunkIndex))
 
@@ -244,6 +246,14 @@ class EpubBookReader(
             else -> "Georgia, 'Noto Serif', serif"
         }
 
+        // Preset values are whitelisted; never interpolate arbitrary CSS from preferences.
+        val (horizontalPadding, textMeasure) = when (pageMargin) {
+            "Compact" -> "clamp(12px, 3vw, 24px)" to "76ch"
+            "Wide" -> "clamp(32px, 8vw, 72px)" to "62ch"
+            else -> "clamp(18px, 5vw, 48px)" to "68ch"
+        }
+        val safeLineHeight = lineSpacing.coerceIn(1.4f, 2.2f)
+
         val bgHex = backgroundColor.toHex()
         val textHex = textColor.toHex()
 
@@ -259,11 +269,11 @@ class EpubBookReader(
             <style>
                 html { -webkit-text-size-adjust: 100%; }
                 body {
-                    padding: clamp(18px, 5vw, 48px);
+                    padding: $horizontalPadding;
                     padding-bottom: 84px; /* Keep last lines clear of the reading progress strip. */
                     font-family: $fontStack !important;
-                    line-height: 1.72; font-size: ${fontSizeEm}em;
-                    max-width: 68ch; margin: 0 auto;
+                    line-height: $safeLineHeight; font-size: ${fontSizeEm}em;
+                    max-width: $textMeasure; margin: 0 auto;
                     text-align: start;
                     overflow-x: hidden;
                     overflow-wrap: break-word;
@@ -272,6 +282,7 @@ class EpubBookReader(
                     background-color: $bgHex !important;
                     color: $textHex !important;
                 }
+                p, li { line-height: $safeLineHeight !important; }
                 p { margin-block: 0 1.05em; }
                 h1, h2, h3 { line-height: 1.24; text-wrap: balance; margin: 1.35em 0 0.65em; }
                 blockquote { border-inline-start: 3px solid $textHex; padding-inline-start: 1em; margin-inline: 0; }
