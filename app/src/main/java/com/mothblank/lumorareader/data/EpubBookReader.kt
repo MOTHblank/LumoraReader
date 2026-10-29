@@ -260,6 +260,7 @@ class EpubBookReader(
                 html { -webkit-text-size-adjust: 100%; }
                 body {
                     padding: clamp(18px, 5vw, 48px);
+                    padding-bottom: 84px; /* Keep last lines clear of the reading progress strip. */
                     font-family: $fontStack !important;
                     line-height: 1.72; font-size: ${fontSizeEm}em;
                     max-width: 68ch; margin: 0 auto;
