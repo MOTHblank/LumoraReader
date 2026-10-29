@@ -1,5 +1,6 @@
 package com.mothblank.lumorareader.data.db.entity
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.PrimaryKey
 
@@ -15,7 +16,7 @@ data class RecentBookEntity(
     val scrollOffset: Int = 0,
     val epubAnchor: String? = null,
     val isAvailable: Boolean = true,
-    val isFavorite: Boolean = false,
-    val readingStatus: String = "READING",
+    @ColumnInfo(defaultValue = "0") val isFavorite: Boolean = false,
+    @ColumnInfo(defaultValue = "'READING'") val readingStatus: String = "READING",
     val collectionName: String? = null
 )
