@@ -6,6 +6,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Book
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.MenuBook
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -30,6 +31,7 @@ fun EnhancedQuoteCard(
     onEditClick: (Quote) -> Unit,
     onAddToWidgetClick: (Quote) -> Unit,
     onDeleteClick: (Quote) -> Unit,
+    onJumpClick: (Quote) -> Unit,
     modifier: Modifier = Modifier
 ) {
     var showFullText by remember { mutableStateOf(false) }
@@ -114,6 +116,38 @@ fun EnhancedQuoteCard(
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
+            }
+
+            if (!quote.note.isNullOrBlank()) {
+                Text(
+                    text = "Note: ${quote.note}",
+                    style = MaterialTheme.typography.bodySmall,
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+            if (quote.categories.isNotEmpty()) {
+                Text(
+                    text = quote.categories.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(modifier = Modifier.height(6.dp))
+            }
+            if (quote.sourceUri != null &&
+                (quote.pageNumber != null || quote.epubChunkIndex != null)
+            ) {
+                TextButton(onClick = { onJumpClick(quote) }) {
+                    Icon(
+                        imageVector = Icons.Default.MenuBook,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("Jump to passage")
+                }
             }
 
             // Footer with action buttons
