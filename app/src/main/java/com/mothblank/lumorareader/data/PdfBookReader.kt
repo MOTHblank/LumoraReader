@@ -2,35 +2,36 @@ package com.mothblank.lumorareader.data
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.graphics.Matrix
+import android.graphics.Rect
+import android.graphics.RectF
 import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.os.ParcelFileDescriptor
-import com.mothblank.lumorareader.domain.usecase.BookReader
+import com.mothblank.lumorareader.R
 import com.mothblank.lumorareader.domain.model.Page
+import com.mothblank.lumorareader.domain.usecase.BookReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import com.mothblank.lumorareader.R
 import java.io.IOException
+import kotlin.math.roundToInt
+import kotlin.math.sqrt
 
 /**
- * A BookReader implementation for handling PDF files.
+ * Native PDF rendering at the requested on-screen resolution.
  *
- * This class is responsible for opening a PDF from a given URI,
- * rendering its pages into Bitmaps, and managing the file resources.
- *
- * @param context The application context, needed to access the ContentResolver.
- * @param bookUri The string representation of the content URI for the PDF file.
+ * PdfRenderer is not thread-safe: guard opening, rendering and closing pages
+ * with the same lock. A tile is a normalized source rectangle of a PDF page,
+ * rendered directly, rather than cropping a very large full-page bitmap.
  */
 class PdfBookReader(
     private val context: Context,
     bookUri: String
 ) : BookReader {
-
-    // The file descriptor for the PDF file.
+    private val renderLock = Any()
     private val pfd: ParcelFileDescriptor
-
-    // The core PDF rendering engine provided by Android.
     private val renderer: PdfRenderer
+    private var closed = false
 
     init {
         var openedDescriptor: ParcelFileDescriptor? = null
@@ -42,7 +43,6 @@ class PdfBookReader(
             pfd = descriptor
             renderer = openedRenderer
         } catch (error: Exception) {
-            // PdfRenderer may throw after the descriptor has been acquired.
             try {
                 openedDescriptor?.close()
             } catch (closeError: Exception) {
@@ -52,85 +52,96 @@ class PdfBookReader(
         }
     }
 
-    /**
-     * Returns the total number of pages in the PDF document.
-     */
-    override fun getPageCount(): Int = renderer.pageCount
+    override fun getPageCount(): Int = synchronized(renderLock) {
+        if (closed) 0 else renderer.pageCount
+    }
 
-    /**
-     * Renders a single page of the PDF into a Bitmap.
-     *
-     * This is a suspend function that performs the rendering on an I/O-optimized thread
-     * to avoid blocking the UI.
-     *
-     * @param pageIndex The zero-based index of the page to render.
-     * @return A [Page.PdfPage] containing the rendered [Bitmap].
-     * @throws IndexOutOfBoundsException if the pageIndex is invalid.
-     */
-    override suspend fun getPage(pageIndex: Int): Page = withContext(Dispatchers.IO) {
-        if (pageIndex < 0 || pageIndex >= renderer.pageCount) {
-            throw IndexOutOfBoundsException(context.getString(R.string.invalid_page_index, pageIndex))
-        }
+    // BookReader fallback. The reader UI uses renderPage with its actual width.
+    override suspend fun getPage(pageIndex: Int): Page = renderPage(pageIndex, 1080)
 
-        // Use the 'use' block to automatically close the PdfRenderer.Page object
-        // after it's been used. This is crucial for memory management.
-        renderer.openPage(pageIndex).use { page ->
-            // Implement safe PDF bitmap allocation limits: scale down if either dimension exceeds MAX_BITMAP_DIMENSION
-            var targetWidth = page.width
-            var targetHeight = page.height
+    suspend fun renderPage(pageIndex: Int, targetWidthPx: Int): Page.PdfPage =
+        renderRegion(pageIndex, RectF(0f, 0f, 1f, 1f), targetWidthPx, MAX_PAGE_PIXELS)
 
-            if (targetWidth > MAX_BITMAP_DIMENSION || targetHeight > MAX_BITMAP_DIMENSION) {
-                val aspectRatio = targetWidth.toFloat() / targetHeight.toFloat()
-                if (targetWidth > targetHeight) {
-                    targetWidth = MAX_BITMAP_DIMENSION
-                    targetHeight = (MAX_BITMAP_DIMENSION / aspectRatio).toInt()
-                } else {
-                    targetHeight = MAX_BITMAP_DIMENSION
-                    targetWidth = (MAX_BITMAP_DIMENSION * aspectRatio).toInt()
+    suspend fun renderTile(pageIndex: Int, region: RectF, targetWidthPx: Int): Page.PdfPage =
+        renderRegion(pageIndex, region, targetWidthPx, MAX_TILE_PIXELS)
+
+    private suspend fun renderRegion(
+        pageIndex: Int,
+        region: RectF,
+        requestedWidthPx: Int,
+        maxPixels: Int
+    ): Page.PdfPage = withContext(Dispatchers.IO) {
+        require(region.left >= 0f && region.top >= 0f &&
+            region.right <= 1f && region.bottom <= 1f &&
+            region.width() > 0f && region.height() > 0f &&
+            region.left.isFinite() && region.top.isFinite() &&
+            region.right.isFinite() && region.bottom.isFinite()
+        ) { "Invalid normalized PDF region" }
+
+        synchronized(renderLock) {
+            check(!closed) { "PDF renderer already closed" }
+            if (pageIndex !in 0 until renderer.pageCount) {
+                throw IndexOutOfBoundsException(context.getString(R.string.invalid_page_index, pageIndex))
+            }
+            renderer.openPage(pageIndex).use { page ->
+                val desiredWidth = requestedWidthPx.coerceIn(1, MAX_RENDER_SIDE).toFloat()
+                val aspectRatio = page.height.toFloat() * region.height() /
+                    (page.width.toFloat() * region.width())
+                val desiredHeight = desiredWidth * aspectRatio
+                // Budget each allocation before creating any bitmap, including tall pages.
+                val pixelScale = minOf(
+                    1f,
+                    MAX_RENDER_SIDE / desiredWidth,
+                    MAX_RENDER_SIDE / desiredHeight,
+                    sqrt(maxPixels.toFloat() / (desiredWidth * desiredHeight))
+                )
+                val width = (desiredWidth * pixelScale).roundToInt().coerceIn(1, MAX_RENDER_SIDE)
+                val height = (desiredHeight * pixelScale).roundToInt().coerceIn(1, MAX_RENDER_SIDE)
+                val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                try {
+                    // Map full-page PDF coordinates into this visible bitmap subsection.
+                    val transform = Matrix().apply {
+                        setScale(
+                            width / (page.width.toFloat() * region.width()),
+                            height / (page.height.toFloat() * region.height())
+                        )
+                        postTranslate(
+                            -region.left * width / region.width(),
+                            -region.top * height / region.height()
+                        )
+                    }
+                    page.render(
+                        bitmap,
+                        Rect(0, 0, width, height),
+                        transform,
+                        PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                    )
+                    Page.PdfPage(bitmap)
+                } catch (error: Exception) {
+                    bitmap.recycle()
+                    throw error
                 }
             }
+        }
+    }
 
-            // Ensure dimensions are at least 1 pixel
-            targetWidth = targetWidth.coerceAtLeast(1)
-            targetHeight = targetHeight.coerceAtLeast(1)
+    override fun getTableOfContents(): List<Pair<String, Int>> = emptyList()
 
-            // Create a bitmap with the safe dimensions.
-            val bitmap = Bitmap.createBitmap(targetWidth, targetHeight, Bitmap.Config.ARGB_8888)
-
-            // Render the page content onto the bitmap.
-            // The other null parameters mean we render the full page with no clipping.
-            page.render(bitmap, null, null, PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY)
-
-            // Return the result wrapped in our sealed interface.
-            Page.PdfPage(bitmap)
+    override fun close() {
+        synchronized(renderLock) {
+            if (closed) return
+            closed = true
+            try {
+                renderer.close()
+            } finally {
+                pfd.close()
+            }
         }
     }
 
     companion object {
-        private const val MAX_BITMAP_DIMENSION = 2048
-    }
-
-    /**
-     * Returns the table of contents.
-     * Note: Standard PDFs do not have a simple, universally parsable ToC structure
-     * like EPUBs do. For this implementation, we return an empty list.
-     * Advanced libraries would be needed to parse PDF bookmarks.
-     */
-    override fun getTableOfContents(): List<Pair<String, Int>> {
-        return emptyList()
-    }
-
-    /**
-     * Closes the PdfRenderer and the file descriptor.
-     * This MUST be called when the reader is no longer needed to release system resources
-     * and prevent memory leaks. The ViewModel's `onCleared()` is the perfect place for this.
-     */
-    override fun close() {
-        // Always release the descriptor, including when renderer.close() fails.
-        try {
-            renderer.close()
-        } finally {
-            pfd.close()
-        }
+        private const val MAX_RENDER_SIDE = 3072
+        private const val MAX_PAGE_PIXELS = 3_000_000 // ~12 MiB ARGB_8888
+        private const val MAX_TILE_PIXELS = 2_000_000 // ~8 MiB ARGB_8888
     }
 }
