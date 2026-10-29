@@ -500,7 +500,7 @@ fun ScrollableReaderSettingsMenu(
         // Additional settings with interactive bubbles - more compact in landscape
         Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text(
-                "Quick Actions",
+                stringResource(R.string.reader_quick_actions),
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -512,7 +512,7 @@ fun ScrollableReaderSettingsMenu(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Refresh,
-                    contentDescription = "Reload book",
+                    contentDescription = stringResource(R.string.reader_reload_book),
                     color = MaterialTheme.colorScheme.secondary,
                     isSelected = false,
                     onClick = onRefresh
@@ -522,7 +522,7 @@ fun ScrollableReaderSettingsMenu(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Share,
-                    contentDescription = "Share book",
+                    contentDescription = stringResource(R.string.reader_share_book),
                     color = MaterialTheme.colorScheme.tertiary,
                     isSelected = false,
                     onClick = onShare
@@ -532,7 +532,7 @@ fun ScrollableReaderSettingsMenu(
                     size = if (isLandscape) 48.dp else 56.dp,
                     text = "",
                     icon = Icons.Default.Info,
-                    contentDescription = "Book information",
+                    contentDescription = stringResource(R.string.reader_book_information),
                     color = MaterialTheme.colorScheme.outline,
                     isSelected = false,
                     onClick = onShowInfo
@@ -794,7 +794,7 @@ fun ReaderSettingsMenu(
 
             // Additional settings with interactive bubbles
             Text(
-                "Quick Actions",
+                stringResource(R.string.reader_quick_actions),
                 style = MaterialTheme.typography.titleMedium
             )
 
@@ -806,7 +806,7 @@ fun ReaderSettingsMenu(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Refresh,
-                    contentDescription = "Reload book",
+                    contentDescription = stringResource(R.string.reader_reload_book),
                     color = MaterialTheme.colorScheme.secondary,
                     isSelected = false,
                     onClick = onRefresh
@@ -816,7 +816,7 @@ fun ReaderSettingsMenu(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Share,
-                    contentDescription = "Share book",
+                    contentDescription = stringResource(R.string.reader_share_book),
                     color = MaterialTheme.colorScheme.tertiary,
                     isSelected = false,
                     onClick = onShare
@@ -826,7 +826,7 @@ fun ReaderSettingsMenu(
                     size = 56.dp,
                     text = "",
                     icon = Icons.Default.Info,
-                    contentDescription = "Book information",
+                    contentDescription = stringResource(R.string.reader_book_information),
                     color = MaterialTheme.colorScheme.outline,
                     isSelected = false,
                     onClick = onShowInfo
