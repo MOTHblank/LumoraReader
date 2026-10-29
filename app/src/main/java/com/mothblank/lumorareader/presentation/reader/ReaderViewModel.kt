@@ -1,6 +1,10 @@
 package com.mothblank.lumorareader.presentation.reader
 
 import android.content.Context
+import android.graphics.RectF
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import android.content.pm.ActivityInfo
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.core.content.FileProvider
@@ -9,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.BuildConfig
 import com.mothblank.lumorareader.data.EpubBookReader
+import com.mothblank.lumorareader.data.PdfBookReader
 import com.mothblank.lumorareader.data.RecentBooksRepository
 import com.mothblank.lumorareader.domain.model.EpubReadingAnchor
 import com.mothblank.lumorareader.domain.model.RecentBook
@@ -36,6 +41,8 @@ import java.io.File
 import java.io.FileNotFoundException
 import java.text.SimpleDateFormat
 import java.util.*
+import kotlin.math.abs
+import kotlin.math.roundToInt
 import javax.inject.Inject
 
 @HiltViewModel
@@ -58,6 +65,19 @@ class ReaderViewModel @Inject constructor(
     private val epubFilesInUse = mutableMapOf<String, Int>()
     private val deferredChunkDeletes = mutableMapOf<String, MutableSet<File>>()
     private val pdfPageJobs = mutableMapOf<Int, Job>()
+    private val pdfLru = LinkedHashMap<Int, Page.PdfPage>(16, 0.75f, true)
+    private val pdfRenderedWidths = mutableMapOf<Int, Int>()
+    private var pdfViewportWidthPx = 1080
+    // Bound all retained PDF pixel data, not just the number of page indices.
+    private val pdfCacheBudgetBytes = minOf(
+        32L * 1024 * 1024,
+        (Runtime.getRuntime().maxMemory() / 8).coerceAtLeast(8L * 1024 * 1024)
+    )
+    data class PdfZoomTile(val pageIndex: Int, val region: RectF, val page: Page.PdfPage)
+    var pdfZoomTile by mutableStateOf<PdfZoomTile?>(null)
+        private set
+    private var pdfTileJob: Job? = null
+    private var pdfTileRequestId = 0L
     private var readerGeneration = 0L
     private var epubLoadGeneration = 0L
     private var epubChunkJob: Job? = null
@@ -115,7 +135,10 @@ class ReaderViewModel @Inject constructor(
         currentEpubAnchor = null
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
-        pageCache.clear()
+        clearPdfCache()
+        pdfTileJob?.cancel()
+        pdfTileRequestId++
+        pdfZoomTile = null
         epubChunkJob?.cancel()
         epubLoadGeneration++
         clearEpubChunkCache()
@@ -178,9 +201,8 @@ class ReaderViewModel @Inject constructor(
                             currentPdfPage = initialPage, isLoading = false)
                     }
                     if (pageCount > 0) {
-                        for (page in initialPage..minOf(initialPage + 4, pageCount - 1)) {
-                            loadPdfPage(page)
-                        }
+                        loadPdfPage(initialPage)
+                        loadPdfPage(initialPage + 1)
                     }
                 }
             } catch (error: Exception) {
@@ -335,26 +357,74 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
-    // One render per page and reader generation; stale renders never populate the UI cache.
+    /** Re-render when the measured physical viewport changes (including rotation). */
+    fun onPdfViewportWidthChanged(widthPx: Int) {
+        if (widthPx <= 0 || !uiState.value.isPdf) return
+        if (abs(pdfViewportWidthPx - widthPx) <= 8) return
+        pdfViewportWidthPx = widthPx
+        pdfPageJobs.values.forEach { it.cancel() }
+        pdfPageJobs.clear()
+        clearPdfCache()
+        invalidatePdfTile()
+        loadPdfPage(uiState.value.currentPdfPage)
+        loadPdfPage(uiState.value.currentPdfPage + 1)
+    }
+
+    /**
+     * Cache entries are live Compose references. Eviction drops references
+     * instead of recycling bitmaps still being drawn on a previous frame.
+     */
+    private fun clearPdfCache() {
+        pdfLru.clear()
+        pdfRenderedWidths.clear()
+        pageCache.clear()
+    }
+
+    private fun cachedPdfBytes(): Long =
+        pdfLru.values.sumOf { it.image.allocationByteCount.toLong() } +
+            (pdfZoomTile?.page?.image?.allocationByteCount?.toLong() ?: 0L)
+
+    private fun trimPdfCache() {
+        val protectedPage = uiState.value.currentPdfPage
+        while (cachedPdfBytes() > pdfCacheBudgetBytes && pdfLru.isNotEmpty()) {
+            val candidate = pdfLru.keys.firstOrNull { it != protectedPage }
+                ?: pdfLru.keys.first()
+            pdfLru.remove(candidate)
+            pdfRenderedWidths.remove(candidate)
+            pageCache.remove(candidate)
+        }
+    }
+
+    // One render per page and reader generation. The renderer serializes PDF
+    // native calls and the LRU ensures page count alone cannot exhaust memory.
     fun loadPdfPage(index: Int) {
-        val reader = bookReader ?: return
-        if (!uiState.value.isPdf || index !in 0 until uiState.value.pdfPageCount ||
-            pageCache.containsKey(index) || pdfPageJobs.containsKey(index)
-        ) return
+        val reader = bookReader as? PdfBookReader ?: return
+        if (!uiState.value.isPdf || index !in 0 until uiState.value.pdfPageCount) return
+        val width = pdfViewportWidthPx
+        if (pageCache[index] != null && (pdfRenderedWidths[index] ?: 0) >= width * 0.9f) {
+            pdfLru[index] // refresh LRU recency
+            return
+        }
+        if (pdfPageJobs.containsKey(index)) return
         val generation = readerGeneration
         val renderJob = viewModelScope.launch {
             try {
-                val pageResult = withContext(Dispatchers.IO) { reader.getPage(index) }
-                val center = uiState.value.currentPdfPage
+                val pixelLimit = (pdfCacheBudgetBytes / 8).toInt().coerceAtLeast(250_000)
+                val page = reader.renderPage(index, width, pixelLimit)
                 if (generation == readerGeneration && bookReader === reader &&
-                    uiState.value.isPdf && index in (center - 5)..(center + 5)
+                    uiState.value.isPdf && width == pdfViewportWidthPx &&
+                    index in (uiState.value.currentPdfPage - 3)..(uiState.value.currentPdfPage + 3)
                 ) {
-                    pageCache[index] = pageResult
+                    pdfLru[index] = page
+                    pdfRenderedWidths[index] = width
+                    pageCache[index] = page
+                    trimPdfCache()
+                    if (index == uiState.value.currentPdfPage) schedulePdfTile()
                 }
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                Timber.e(error, "Failed to load PDF page $index")
+                Timber.e(error, "Failed to render PDF page $index")
             } finally {
                 if (pdfPageJobs[index] === coroutineContext[Job]) {
                     pdfPageJobs.remove(index)
@@ -364,33 +434,96 @@ class ReaderViewModel @Inject constructor(
         pdfPageJobs[index] = renderJob
     }
 
+    private fun invalidatePdfTile() {
+        pdfTileRequestId++
+        pdfTileJob?.cancel()
+        pdfTileJob = null
+        pdfZoomTile = null
+    }
+
+    private fun schedulePdfTile() {
+        pdfTileJob?.cancel()
+        val state = uiState.value
+        val pageIndex = state.currentPdfPage
+        if (!state.isPdf || state.pdfPageZoomScale < 1.45f) {
+            invalidatePdfTile()
+            return
+        }
+        val base = pageCache[pageIndex] as? Page.PdfPage ?: return
+        val reader = bookReader as? PdfBookReader ?: return
+        val zoom = state.pdfPageZoomScale
+        val displayWidth = pdfViewportWidthPx.toFloat()
+        val displayHeight = displayWidth * base.image.height / base.image.width
+        val centerX = 0.5f - state.pdfPageOffsetX / (displayWidth * zoom)
+        val centerY = 0.5f - state.pdfPageOffsetY / (displayHeight * zoom)
+        val half = 0.5f / zoom
+        val gutter = 0.12f / zoom
+        val region = RectF(
+            (centerX - half - gutter).coerceIn(0f, 1f),
+            (centerY - half - gutter).coerceIn(0f, 1f),
+            (centerX + half + gutter).coerceIn(0f, 1f),
+            (centerY + half + gutter).coerceIn(0f, 1f)
+        )
+        if (region.width() < 0.001f || region.height() < 0.001f) return
+        val existing = pdfZoomTile
+        if (existing != null && existing.pageIndex == pageIndex &&
+            existing.region.left <= centerX - half + 0.001f &&
+            existing.region.top <= centerY - half + 0.001f &&
+            existing.region.right >= centerX + half - 0.001f &&
+            existing.region.bottom >= centerY + half - 0.001f
+        ) return
+        val requestId = ++pdfTileRequestId
+        val generation = readerGeneration
+        pdfTileJob = viewModelScope.launch {
+            delay(180) // only rasterize after the pinch/pan settles
+            try {
+                val renderWidth = (region.width() * displayWidth * zoom * 1.15f)
+                    .roundToInt().coerceAtLeast(1)
+                val pixelLimit = (pdfCacheBudgetBytes / 8).toInt().coerceAtLeast(250_000)
+                val tile = reader.renderTile(pageIndex, region, renderWidth, pixelLimit)
+                if (generation == readerGeneration && bookReader === reader &&
+                    requestId == pdfTileRequestId && uiState.value.currentPdfPage == pageIndex &&
+                    uiState.value.pdfPageZoomScale >= 1.45f
+                ) {
+                    pdfZoomTile = PdfZoomTile(pageIndex, RectF(region), tile)
+                    trimPdfCache()
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.e(error, "Failed to render zoom tile on PDF page $pageIndex")
+            }
+        }
+    }
+
     fun onPdfPageChanged(index: Int) {
         if (index !in 0 until uiState.value.pdfPageCount) return
         if (!uiState.value.isTextSelectionActive) {
+            if (index != uiState.value.currentPdfPage) {
+                resetPdfPageZoom()
+            }
             _uiState.update { it.copy(currentPdfPage = index) }
             schedulePositionSave(index, 0, uiState.value.pdfPageCount)
-            resetPdfPageZoom()
-
             prunePdfPageCache(index)
-            if (index > 0) loadPdfPage(index - 1)
             loadPdfPage(index)
+            loadPdfPage(index - 1)
             loadPdfPage(index + 1)
             loadPdfPage(index + 2)
-            loadPdfPage(index + 3)
         }
     }
 
     private fun prunePdfPageCache(currentPageIndex: Int) {
-        val keepRange = (currentPageIndex - 5)..(currentPageIndex + 5)
-        val keysToRemove = pageCache.keys.filter { it !in keepRange }
-        keysToRemove.forEach { pageCache.remove(it) }
+        val keepRange = (currentPageIndex - 3)..(currentPageIndex + 3)
+        pdfLru.keys.filter { it !in keepRange }.forEach { index ->
+            pdfLru.remove(index)
+            pdfRenderedWidths.remove(index)
+            pageCache.remove(index)
+        }
         pdfPageJobs.entries.filter { it.key !in keepRange }.forEach { (index, job) ->
             pdfPageJobs.remove(index)
             job.cancel()
         }
-        if (keysToRemove.isNotEmpty()) {
-            Timber.d("Pruned ${keysToRemove.size} pages from PDF render cache. Remaining cache size: ${pageCache.size}")
-        }
+        trimPdfCache()
     }
 
     fun onToggleMenuVisibility() {
@@ -485,16 +618,19 @@ class ReaderViewModel @Inject constructor(
 
     // PDF Zoom functions
     fun onPdfPageZoomChange(scale: Float, offsetX: Float, offsetY: Float) {
+        val clampedScale = scale.coerceIn(1f, 4f)
         _uiState.update {
             it.copy(
-                pdfPageZoomScale = scale,
-                pdfPageOffsetX = offsetX,
-                pdfPageOffsetY = offsetY
+                pdfPageZoomScale = clampedScale,
+                pdfPageOffsetX = if (clampedScale == 1f) 0f else offsetX,
+                pdfPageOffsetY = if (clampedScale == 1f) 0f else offsetY
             )
         }
+        schedulePdfTile()
     }
 
     fun resetPdfPageZoom() {
+        invalidatePdfTile()
         _uiState.update {
             it.copy(
                 pdfPageZoomScale = 1f,
@@ -588,13 +724,15 @@ class ReaderViewModel @Inject constructor(
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
+        pdfTileJob?.cancel()
+        pdfZoomTile = null
         positionSaveJob?.cancel()
         clearEpubChunkCache()
         deferredChunkDeletes.values.flatten().forEach { deleteChunkFile(it) }
         deferredChunkDeletes.clear()
         epubFilesInUse.clear()
         bookReader?.close()
-        pageCache.clear()
+        clearPdfCache()
         super.onCleared()
     }
 }
