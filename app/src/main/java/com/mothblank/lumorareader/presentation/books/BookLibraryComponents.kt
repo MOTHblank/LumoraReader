@@ -185,25 +185,42 @@ internal fun LibraryBookCard(
                     )
                 }
             }
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                FilledTonalButton(onClick = onOpen, enabled = book.isAvailable) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.library_open_book))
-                }
-                TextButton(onClick = onOrganize) {
-                    Icon(Icons.Default.Edit, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(4.dp))
-                    Text(stringResource(R.string.library_edit))
-                }
-                Spacer(Modifier.weight(1f))
-                IconButton(onClick = onRemove) {
-                    Icon(Icons.Default.DeleteOutline,
-                        contentDescription = stringResource(R.string.library_remove))
+            BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {
+                // Only abbreviate the actions when they would otherwise crowd
+                // each other. Buttons, colors, shape and order are unchanged.
+                val compact = maxWidth < 330.dp
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    FilledTonalButton(
+                        onClick = onOpen,
+                        enabled = book.isAvailable
+                    ) {
+                        Icon(Icons.Default.PlayArrow, contentDescription = null,
+                            modifier = Modifier.size(18.dp))
+                        Spacer(Modifier.width(4.dp))
+                        Text(stringResource(
+                            if (compact) R.string.library_read_short
+                            else R.string.library_open_book
+                        ))
+                    }
+                    TextButton(onClick = onOrganize) {
+                        Icon(Icons.Default.Edit, contentDescription = null,
+                            modifier = Modifier.size(18.dp))
+                        if (!compact) {
+                            Spacer(Modifier.width(4.dp))
+                            Text(stringResource(R.string.library_edit))
+                        } else {
+                            Text(stringResource(R.string.library_edit_short))
+                        }
+                    }
+                    Spacer(Modifier.weight(1f))
+                    IconButton(onClick = onRemove) {
+                        Icon(Icons.Default.DeleteOutline,
+                            contentDescription = stringResource(R.string.library_remove))
+                    }
                 }
             }
         }
