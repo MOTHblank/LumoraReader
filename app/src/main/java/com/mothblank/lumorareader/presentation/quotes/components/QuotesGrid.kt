@@ -19,6 +19,7 @@ fun QuotesGrid(
     onDeleteClicked: (Quote) -> Unit,
     onEditClicked: (Quote) -> Unit,
     onAddToWidgetClick: (Quote) -> Unit,
+    onJumpClick: (Quote) -> Unit,
     modifier: Modifier = Modifier
 ) {
     LazyVerticalStaggeredGrid(
@@ -34,7 +35,8 @@ fun QuotesGrid(
                 quote = quote,
                 onEditClick = onEditClicked,
                 onAddToWidgetClick = onAddToWidgetClick,
-                onDeleteClick = onDeleteClicked
+                onDeleteClick = onDeleteClicked,
+                onJumpClick = onJumpClick
             )
         }
     }
