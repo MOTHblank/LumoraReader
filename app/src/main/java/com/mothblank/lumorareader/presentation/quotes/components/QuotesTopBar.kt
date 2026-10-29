@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ fun QuotesTopBar(
     // New parameters for discrete controls
     onShowFilterOptions: () -> Unit,
     onShowMoreOptions: () -> Unit,
+    onOpenDiscovery: () -> Unit,
     // New parameter for the scroll-aware background
     containerColor: Color,
     onBackClick: () -> Unit,
@@ -49,6 +51,9 @@ fun QuotesTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onOpenDiscovery) {
+                Icon(Icons.Default.Search, contentDescription = stringResource(R.string.home_search))
+            }
             // Filter/Search icon
             IconButton(onClick = onShowFilterOptions) {
                 Icon(
