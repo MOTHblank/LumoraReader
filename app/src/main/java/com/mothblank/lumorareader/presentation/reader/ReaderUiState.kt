@@ -3,6 +3,8 @@ package com.mothblank.lumorareader.presentation.reader
 import android.content.pm.ActivityInfo
 import com.mothblank.lumorareader.domain.BookType
 import com.mothblank.lumorareader.data.EpubChapter
+import com.mothblank.lumorareader.domain.model.ReadingBookmark
+import com.mothblank.lumorareader.domain.model.Quote
 import com.mothblank.lumorareader.ui.theme.LumoraTheme
 
 /** Immutable rendering state. Repository and cache ownership stay in the ViewModel. */
@@ -24,6 +26,8 @@ data class ReaderUiState(
     val tableOfContents: List<EpubChapter> = emptyList(),
     val currentSpineIndex: Int = -1,
     val quoteHighlightText: String? = null,
+    val bookmarks: List<ReadingBookmark> = emptyList(),
+    val bookQuotes: List<Quote> = emptyList(),
     val epubFileUri: String? = null,
     val epubChunkCount: Int = 1,
     val currentChunkIndex: Int = 0,
