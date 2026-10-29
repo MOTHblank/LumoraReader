@@ -302,6 +302,7 @@ fun ScrollableReaderSettingsMenu(
 
         HorizontalDivider()
 
+        if (uiState.isEpub) {
         // Reading typography. Sliders commit on release to avoid generating
         // a new EPUB WebView for every pointer movement.
         var pendingFontSize by remember(uiState.fontSizeScale) {
@@ -402,6 +403,8 @@ fun ScrollableReaderSettingsMenu(
             }
             HorizontalDivider()
         }
+
+        } // EPUB-only text size and font controls
 
         if (uiState.isEpub) {
             Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
