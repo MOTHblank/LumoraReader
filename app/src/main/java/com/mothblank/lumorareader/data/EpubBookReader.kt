@@ -113,6 +113,10 @@ class EpubBookReader(
 
     fun getChunkCount(): Int = chunkedSpine.size
 
+    /** Resolve a stable spine identifier even if EPUB chunk sizes have changed. */
+    fun chunkForSpine(spineIndex: Int): Int? = chunkedSpine.indexOfFirst { spineIndex in it }
+        .takeIf { it >= 0 }
+
     private fun createChunks() {
         chunkedSpine.clear()
         var currentChunk = mutableListOf<Int>()
