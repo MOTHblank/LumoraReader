@@ -93,24 +93,30 @@ class EpubSearchRepository @Inject constructor(
     private fun sourceFingerprint(uri: String, spineCount: Int): String {
         var size = -1L
         var lastModified = -1L
+        val contentUri = Uri.parse(uri)
+        // Query independently: providers commonly support SIZE but reject an
+        // unfamiliar LAST_MODIFIED column in a combined projection.
         try {
             context.contentResolver.query(
-                Uri.parse(uri),
-                arrayOf(OpenableColumns.SIZE, DocumentsContract.Document.COLUMN_LAST_MODIFIED),
-                null, null, null
+                contentUri, arrayOf(OpenableColumns.SIZE), null, null, null
             )?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val sizeIndex = cursor.getColumnIndex(OpenableColumns.SIZE)
-                    val modifiedIndex = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
-                    if (sizeIndex >= 0 && !cursor.isNull(sizeIndex)) size = cursor.getLong(sizeIndex)
-                    if (modifiedIndex >= 0 && !cursor.isNull(modifiedIndex)) {
-                        lastModified = cursor.getLong(modifiedIndex)
-                    }
+                val column = cursor.getColumnIndex(OpenableColumns.SIZE)
+                if (cursor.moveToFirst() && column >= 0 && !cursor.isNull(column)) {
+                    size = cursor.getLong(column)
                 }
             }
-        } catch (_: Exception) {
-            // Not every SAF provider exposes document modification metadata.
-        }
+        } catch (_: Exception) { /* Optional provider metadata. */ }
+        try {
+            context.contentResolver.query(
+                contentUri, arrayOf(DocumentsContract.Document.COLUMN_LAST_MODIFIED),
+                null, null, null
+            )?.use { cursor ->
+                val column = cursor.getColumnIndex(DocumentsContract.Document.COLUMN_LAST_MODIFIED)
+                if (cursor.moveToFirst() && column >= 0 && !cursor.isNull(column)) {
+                    lastModified = cursor.getLong(column)
+                }
+            }
+        } catch (_: Exception) { /* Optional provider metadata. */ }
         return size.toString() + ":" + lastModified + ":" + spineCount
     }
 

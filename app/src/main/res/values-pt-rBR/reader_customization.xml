@@ -11,6 +11,8 @@
     <string name="reader_margin_comfortable">Confortáveis</string>
     <string name="reader_margin_wide">Largas</string>
     <string name="reader_pdf_display">Visualização de PDF</string>
+    <string name="reader_pdf_outline_count">Sumário do PDF (%1$d itens)</string>
+    <string name="reader_pdf_outline_page">p. %1$d</string>
     <string name="reader_pdf_night_mode">Cores noturnas</string>
     <string name="reader_pdf_night_mode_hint">Inverta as cores da página para ler com mais conforto no escuro.</string>
     <string name="reader_pdf_spacing">Espaçamento entre páginas</string>

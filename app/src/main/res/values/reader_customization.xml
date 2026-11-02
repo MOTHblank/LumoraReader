@@ -11,6 +11,8 @@
     <string name="reader_margin_comfortable">Comfortable</string>
     <string name="reader_margin_wide">Wide</string>
     <string name="reader_pdf_display">PDF display</string>
+    <string name="reader_pdf_outline_count">PDF outline (%1$d entries)</string>
+    <string name="reader_pdf_outline_page">p. %1$d</string>
     <string name="reader_pdf_night_mode">Night colors</string>
     <string name="reader_pdf_night_mode_hint">Invert page colors for comfortable reading in the dark.</string>
     <string name="reader_pdf_spacing">Space between pages</string>

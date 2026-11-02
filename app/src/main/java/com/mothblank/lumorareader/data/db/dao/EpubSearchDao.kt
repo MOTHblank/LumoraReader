@@ -26,7 +26,7 @@ interface EpubSearchDao {
                snippet(epub_search_fts, '[', ']', '…', 3, 12) AS snippet
         FROM epub_search_fts
         INNER JOIN reading_history ON reading_history.uri = epub_search_fts.bookUri
-        WHERE epub_search_fts MATCH :query AND reading_history.isAvailable = 1
+        WHERE epub_search_fts.content MATCH :query AND reading_history.isAvailable = 1
         ORDER BY reading_history.lastOpened DESC
         LIMIT 40
     """)

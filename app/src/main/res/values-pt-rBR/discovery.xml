@@ -2,7 +2,8 @@
 <resources>
     <string name="discovery_title">Explorar leituras</string>
     <string name="discovery_search">Pesquisar tudo</string>
-    <string name="discovery_search_hint">Livros, citações, marcadores e notas</string>
+    <string name="discovery_search_hint">Livros, seu conteúdo, citações, marcadores e notas</string>
+    <string name="discovery_content_hits">No texto dos EPUBs (%1$d)</string>
     <string name="discovery_books">Livros (%1$d)</string>
     <string name="discovery_quotes">Citações (%1$d)</string>
     <string name="discovery_bookmarks">Marcadores e notas (%1$d)</string>
@@ -12,7 +13,7 @@
     <string name="discovery_recent_minutes">Últimos 7 dias: %1$d min</string>
     <string name="discovery_all_minutes">Total registrado: %1$d min · %2$d sessões</string>
     <string name="discovery_activity_note">Somente tempo com o leitor em primeiro plano. Registrado desde esta versão; não mede atenção.</string>
-    <string name="discovery_no_results">Nenhum livro, citação, marcador ou nota encontrado.</string>
+    <string name="discovery_no_results">Nenhum livro, trecho de EPUB, citação, marcador ou nota encontrado.</string>
     <string name="discovery_empty_library">Abra um livro ou salve um trecho para começar.</string>
     <string name="home_search">Pesquisar biblioteca</string>
     <string name="home_activity_summary">%1$d livros · %2$d em leitura · %3$d min abertos nos últimos 7 dias</string>

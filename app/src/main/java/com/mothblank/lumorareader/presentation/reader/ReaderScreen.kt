@@ -494,7 +494,8 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text(if (uiState.isPdf) "PDF outline · ${uiState.tableOfContents.size} entries"
+                                Text(if (uiState.isPdf)
+                                     stringResource(R.string.reader_pdf_outline_count, uiState.tableOfContents.size)
                                      else "Contents · ${uiState.currentChapterTitle ?: "Browse chapters"}")
                             }
                         }
@@ -619,7 +620,8 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                         MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface
                                 )
-                                Text(if (uiState.isPdf) "p. ${chapter.chunkIndex + 1}"
+                                Text(if (uiState.isPdf)
+                                     stringResource(R.string.reader_pdf_outline_page, chapter.chunkIndex + 1)
                                      else "${chapter.chunkIndex + 1}")
                             }
                         }

@@ -126,7 +126,7 @@ fun UnifiedSearchScreen(
             }
             if (results.contentHits.isNotEmpty()) {
                 item {
-                    SearchSectionHeader("Inside EPUB books · ${results.contentHits.size}")
+                    SearchSectionHeader(stringResource(R.string.discovery_content_hits, results.contentHits.size))
                 }
                 items(results.contentHits,
                     key = { "content_${it.bookUri}_${it.spineIndex}" }) { hit ->
