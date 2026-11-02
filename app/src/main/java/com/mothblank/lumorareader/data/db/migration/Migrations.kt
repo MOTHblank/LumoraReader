@@ -130,3 +130,29 @@ val MIGRATION_8_9 = object : Migration(8, 9) {
         db.execSQL("CREATE INDEX IF NOT EXISTS index_reading_sessions_startedAt ON reading_sessions(startedAt)")
     }
 }
+
+
+/** Persistent offline EPUB chapter index, without altering existing reader records. */
+val MIGRATION_9_10 = object : Migration(9, 10) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS epub_search_fts USING FTS4(
+                bookUri TEXT NOT NULL,
+                spineIndex INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tokenize=unicode61
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS epub_index_status (
+                bookUri TEXT NOT NULL PRIMARY KEY,
+                fingerprint TEXT NOT NULL,
+                nextSpineIndex INTEGER NOT NULL,
+                indexedChars INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                complete INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+}

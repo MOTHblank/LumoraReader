@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
+import com.mothblank.lumorareader.data.db.dao.EpubSearchDao
 import com.mothblank.lumorareader.data.db.entity.RecentBookEntity
 import com.mothblank.lumorareader.domain.model.RecentBook
 import com.mothblank.lumorareader.domain.model.ReadingStatus
@@ -27,7 +28,8 @@ import javax.inject.Singleton
 @Singleton
 class RecentBooksRepository @Inject constructor(
     @ApplicationContext context: Context,
-    private val dao: RecentBookDao
+    private val dao: RecentBookDao,
+    private val epubSearchDao: EpubSearchDao
 ) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -131,11 +133,15 @@ class RecentBooksRepository @Inject constructor(
     suspend fun removeRecentBook(uri: String) {
         migrateLegacyHistory()
         dao.deleteByUri(uri)
+        epubSearchDao.deleteForBook(uri)
+        epubSearchDao.deleteStatus(uri)
     }
 
     suspend fun clearRecentBooks() {
         migrateLegacyHistory()
         dao.deleteAll()
+        epubSearchDao.deleteAllEntries()
+        epubSearchDao.deleteAllStatuses()
     }
 
     private fun RecentBook.toEntity() = RecentBookEntity(

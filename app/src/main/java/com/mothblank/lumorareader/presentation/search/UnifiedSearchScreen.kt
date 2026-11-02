@@ -124,6 +124,25 @@ fun UnifiedSearchScreen(
                     )
                 }
             }
+            if (results.contentHits.isNotEmpty()) {
+                item {
+                    SearchSectionHeader("Inside EPUB books · ${results.contentHits.size}")
+                }
+                items(results.contentHits,
+                    key = { "content_${it.bookUri}_${it.spineIndex}" }) { hit ->
+                    SearchResultCard(
+                        headline = hit.sectionTitle,
+                        detail = "${hit.bookTitle} · ${hit.snippet}",
+                        icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                        enabled = true,
+                        onClick = {
+                            navController.navigate(
+                                "reader/${Uri.encode(hit.bookUri)}?spineIndex=${hit.spineIndex}"
+                            )
+                        }
+                    )
+                }
+            }
             if (results.bookmarks.isNotEmpty()) {
                 item {
                     SearchSectionHeader(

@@ -12,6 +12,7 @@ import androidx.lifecycle.SavedStateHandle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.BuildConfig
+import com.mothblank.lumorareader.data.EpubSearchRepository
 import com.mothblank.lumorareader.data.EpubBookReader
 import com.mothblank.lumorareader.data.EpubChapter
 import com.mothblank.lumorareader.data.PdfBookReader
@@ -58,6 +59,7 @@ class ReaderViewModel @Inject constructor(
     private val savedStateHandle: SavedStateHandle,
     private val quoteRepository: QuoteRepository,
     private val recentBooksRepository: RecentBooksRepository,
+    private val epubSearchRepository: EpubSearchRepository,
     private val bookmarksRepository: ReadingBookmarksRepository,
     private val readingActivityRepository: ReadingActivityRepository,
     @ApplicationContext private val context: Context
@@ -92,6 +94,7 @@ class ReaderViewModel @Inject constructor(
     private var epubChunkJob: Job? = null
     private var bookOpenJob: Job? = null
     private var pdfOutlineJob: Job? = null
+    private var epubIndexJob: Job? = null
     @Volatile private var currentScrollOffset = 0
     @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
     private var selectedEpubAnchor: EpubReadingAnchor? = null
@@ -321,6 +324,7 @@ class ReaderViewModel @Inject constructor(
         // Invalidate requests before replacing the reader, even if opening suspends.
         bookOpenJob?.cancel()
         pdfOutlineJob?.cancel()
+        epubIndexJob?.cancel()
         readerGeneration++
         positionSaveJob?.cancel()
         currentEpubAnchor = null
@@ -368,6 +372,8 @@ class ReaderViewModel @Inject constructor(
                 val requestedEpubAnchor = EpubReadingAnchor.parse(
                     requestedQuote?.epubAnchor ?: requestedBookmark?.epubAnchor
                 )
+                val requestedSearchSpine = savedStateHandle.get<Int>("spineIndex")
+                    ?.takeIf { it >= 0 }
                 val bookDetails = bookRepository.getBookDetails(uri)
                 bookReader?.close()
                 bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
@@ -395,18 +401,23 @@ class ReaderViewModel @Inject constructor(
                 val epubReader = bookReader as? EpubBookReader
                 if (epubReader != null) {
                     val chunkCount = epubReader.getChunkCount()
+                    val searchSpine = requestedSearchSpine?.takeIf { epubReader.chunkForSpine(it) != null }
                     val initialChunk = if (chunkCount > 0) {
-                        (requestedEpubAnchor?.spineIndex?.takeIf { it >= 0 }
+                        (searchSpine?.let { epubReader.chunkForSpine(it) }
+                            ?: requestedEpubAnchor?.spineIndex?.takeIf { it >= 0 }
                             ?.let { epubReader.chunkForSpine(it) }
                             ?: requestedQuote?.epubChunkIndex
                             ?: requestedBookmark?.epubChunkIndex
                             ?: saved?.positionIndex ?: 0).coerceIn(0, chunkCount - 1)
                     } else 0
-                    currentScrollOffset = if (requestedQuote == null && requestedBookmark == null &&
+                    currentScrollOffset = if (searchSpine == null &&
+                        requestedQuote == null && requestedBookmark == null &&
                         saved?.positionIndex == initialChunk) {
                         saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
-                    currentEpubAnchor = if (requestedQuote != null || requestedBookmark != null) {
+                    currentEpubAnchor = if (searchSpine != null) {
+                        EpubReadingAnchor.create(searchSpine, 0, 0f)
+                    } else if (requestedQuote != null || requestedBookmark != null) {
                         requestedEpubAnchor ?: EpubReadingAnchor.create(-1, 0, 0f)
                     } else if (saved?.positionIndex == initialChunk) {
                         EpubReadingAnchor.parse(saved?.epubAnchor)
@@ -427,6 +438,15 @@ class ReaderViewModel @Inject constructor(
                     }
                     if (chunkCount > 0) {
                         loadEpubChunk(initialChunk)
+                        epubIndexJob = viewModelScope.launch(Dispatchers.IO) {
+                            try {
+                                epubSearchRepository.indexBook(uri, epubReader)
+                            } catch (cancelled: CancellationException) {
+                                throw cancelled
+                            } catch (error: Exception) {
+                                Timber.w(error, "EPUB content indexing paused; progress is preserved")
+                            }
+                        }
                     } else {
                         _uiState.update { it.copy(isLoading = false, error = "This EPUB has no readable content") }
                     }
@@ -1102,6 +1122,7 @@ class ReaderViewModel @Inject constructor(
         activityObserveJob?.cancel()
         bookOpenJob?.cancel()
         pdfOutlineJob?.cancel()
+        epubIndexJob?.cancel()
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()

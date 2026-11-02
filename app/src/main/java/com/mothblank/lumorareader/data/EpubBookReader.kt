@@ -2,6 +2,7 @@ package com.mothblank.lumorareader.data
 
 import android.content.Context
 import android.net.Uri
+import android.text.Html
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toArgb
 import com.mothblank.lumorareader.domain.model.Page
@@ -126,6 +127,35 @@ class EpubBookReader(
     // --- Chunking & Content Generation ---
 
     fun getChunkCount(): Int = chunkedSpine.size
+    fun getSpineCount(): Int = spine.size
+
+    /** Bounded plain text of one stable spine section for offline search. */
+    suspend fun textForSearch(spineIndex: Int, maxTextChars: Int): String =
+        withContext(Dispatchers.IO) {
+            synchronized(lifecycleLock) {
+                check(!closed) { "EPUB reader already closed" }
+                val path = spine.getOrNull(spineIndex) ?: return@synchronized ""
+                val file = File(tempDir, path)
+                if (!file.isFile || maxTextChars <= 0) return@synchronized ""
+
+                val maxInputChars = (maxTextChars.coerceAtMost(60_000) * 3).coerceAtMost(180_000)
+                val markup = StringBuilder(maxInputChars)
+                file.bufferedReader(Charsets.UTF_8).use { input ->
+                    val buffer = CharArray(4096)
+                    while (markup.length < maxInputChars) {
+                        val read = input.read(buffer, 0, minOf(buffer.size, maxInputChars - markup.length))
+                        if (read <= 0) break
+                        markup.append(buffer, 0, read)
+                    }
+                }
+                val withoutScripts = markup.toString()
+                    .replace(Regex("""(?is)<(script|style|svg)\b[^>]*>.*?</\1\s*>"""), " ")
+                Html.fromHtml(withoutScripts, Html.FROM_HTML_MODE_COMPACT).toString()
+                    .replace(Regex("""\s+"""), " ")
+                    .trim()
+                    .take(maxTextChars)
+            }
+        }
 
     /** Resolve a stable spine identifier even if EPUB chunk sizes have changed. */
     fun chunkForSpine(spineIndex: Int): Int? = chunkedSpine.indexOfFirst { spineIndex in it }

@@ -2,6 +2,8 @@ package com.mothblank.lumorareader.presentation.search
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mothblank.lumorareader.data.EpubSearchRepository
+import com.mothblank.lumorareader.data.db.dao.EpubSearchHit
 import com.mothblank.lumorareader.data.ReadingActivityRepository
 import com.mothblank.lumorareader.data.ReadingBookmarksRepository
 import com.mothblank.lumorareader.data.RecentBooksRepository
@@ -20,9 +22,10 @@ data class UnifiedSearchResults(
     val books: List<RecentBook> = emptyList(),
     val quotes: List<Quote> = emptyList(),
     val bookmarks: List<ReadingBookmark> = emptyList(),
+    val contentHits: List<EpubSearchHit> = emptyList(),
     val activity: ReadingActivityTotals = ReadingActivityTotals(0L, 0L, 0, 0)
 ) {
-    val isEmpty: Boolean get() = books.isEmpty() && quotes.isEmpty() && bookmarks.isEmpty()
+    val isEmpty: Boolean get() = books.isEmpty() && quotes.isEmpty() && bookmarks.isEmpty() && contentHits.isEmpty()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -31,6 +34,7 @@ class UnifiedSearchViewModel @Inject constructor(
     private val booksRepository: RecentBooksRepository,
     private val quotesRepository: QuoteRepository,
     private val bookmarksRepository: ReadingBookmarksRepository,
+    private val epubSearchRepository: EpubSearchRepository,
     activityRepository: ReadingActivityRepository
 ) : ViewModel() {
     private val _query = MutableStateFlow("")
@@ -65,11 +69,18 @@ class UnifiedSearchViewModel @Inject constructor(
 
     private val since = System.currentTimeMillis() - 7L * 24 * 60 * 60 * 1000
 
+    private val contentMatches = _query
+        .map { it.trim() }
+        .debounce(200L)
+        .distinctUntilChanged()
+        .flatMapLatest { epubSearchRepository.search(it) }
+
     val results: StateFlow<UnifiedSearchResults> = combine(
         matches,
+        contentMatches,
         activityRepository.observeTotals(since)
-    ) { (books, quotes, bookmarks), totals ->
-        UnifiedSearchResults(books, quotes, bookmarks, totals)
+    ) { (books, quotes, bookmarks), hits, totals ->
+        UnifiedSearchResults(books, quotes, bookmarks, hits, totals)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000L),
