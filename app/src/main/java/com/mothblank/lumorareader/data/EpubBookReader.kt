@@ -28,7 +28,11 @@ class EpubBookReader(
     private val bookUri: String
 ) : BookReader {
 
-    private val tempDir: File
+    // Every reader owns an independently locked extraction, even for the same URI.
+    private val extraction = EpubExtractionStorage.acquire(context)
+    private val tempDir = extraction.directory
+    private val lifecycleLock = Any()
+    private var closed = false
     val contentBaseUrl: String
     private val spine: List<String>
     private val chapterCache = mutableMapOf<Int, String>()
@@ -54,11 +58,8 @@ class EpubBookReader(
     private val tableOfContents = mutableListOf<Pair<String, Int>>()
 
     init {
-        // Security hardening: Put temp HTML/EPUB unzipped files in a dedicated subdirectory
-        // of cacheDir so we only share that specific subdirectory in FileProvider,
-        // enforcing the principle of least privilege.
-        val cacheSubdir = File(context.cacheDir, "epub_cache")
-        tempDir = File(cacheSubdir, "epub_${bookUri.hashCode()}").apply { mkdirs() }
+        // The extraction store owns creation, process-safe lease and orphan cleanup.
+        // Resource URLs remain below epub_cache, the FileProvider's scoped cache root.
         try {
             unzipEpub()
 
@@ -78,7 +79,7 @@ class EpubBookReader(
             }
             tableOfContents.addAll(toc)
         } catch (failure: Exception) {
-            tempDir.deleteRecursively()
+            runCatching { extraction.close() }.onFailure { failure.addSuppressed(it) }
             throw failure
         }
     }
@@ -89,13 +90,16 @@ class EpubBookReader(
     override fun getPageCount(): Int = chunkedSpine.size
 
     override suspend fun getPage(pageIndex: Int): Page = withContext(Dispatchers.IO) {
-        if (pageIndex !in chunkedSpine.indices) {
-            throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, pageIndex))
+        synchronized(lifecycleLock) {
+            check(!closed) { "EPUB reader already closed" }
+            if (pageIndex !in chunkedSpine.indices) {
+                throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, pageIndex))
+            }
+            val body = chunkedSpine[pageIndex].joinToString("\n<hr class=\"chapter-break\">\n") {
+                getChapterContent(it)
+            }
+            Page.EpubPage("<html><head><meta charset=\"utf-8\"></head><body>$body</body></html>", contentBaseUrl)
         }
-        val body = chunkedSpine[pageIndex].joinToString("\n<hr class=\"chapter-break\">\n") {
-            getChapterContent(it)
-        }
-        Page.EpubPage("<html><head><meta charset=\"utf-8\"></head><body>$body</body></html>", contentBaseUrl)
     }
 
     // Preserve original spine identifiers: several chapters can share one HTML chunk.
@@ -109,10 +113,14 @@ class EpubBookReader(
         getDetailedTableOfContents().map { it.title to it.chunkIndex }
 
     override fun close() {
-        tempDir.deleteRecursively()
-        chapterCache.clear()
-        mediaFiles.clear()
-        cssFiles.clear()
+        synchronized(lifecycleLock) {
+            if (closed) return
+            closed = true
+            chapterCache.clear()
+            mediaFiles.clear()
+            cssFiles.clear()
+            extraction.close()
+        }
     }
 
     // --- Chunking & Content Generation ---
@@ -228,6 +236,8 @@ class EpubBookReader(
         lineSpacing: Float = 1.7f,
         pageMargin: String = "Comfortable"
     ): File = withContext(Dispatchers.IO) {
+        synchronized(lifecycleLock) {
+            check(!closed) { "EPUB reader already closed" }
         if (chunkIndex !in chunkedSpine.indices) throw IndexOutOfBoundsException(context.getString(R.string.invalid_chunk_index, chunkIndex))
 
         val palette = ThemePalettes.getValue(theme)
@@ -316,10 +326,11 @@ class EpubBookReader(
         val tempHtmlFile = File.createTempFile("scroll_view_chunk_${chunkIndex}_", ".html", tempDir)
         try {
             tempHtmlFile.writeText(finalHtml, Charsets.UTF_8)
-            return@withContext tempHtmlFile
+            tempHtmlFile
         } catch (failure: Exception) {
             tempHtmlFile.delete()
             throw failure
+        }
         }
     }
 
@@ -402,7 +413,7 @@ class EpubBookReader(
                 }
             } ?: throw IOException(context.getString(R.string.failed_to_open_input_stream, bookUri))
         } catch (failure: Exception) {
-            tempDir.deleteRecursively()
+            // The constructor closes the lease after failure; do not remove its lock mid-open.
             mediaFiles.clear()
             cssFiles.clear()
             throw failure
