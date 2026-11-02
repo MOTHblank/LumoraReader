@@ -485,7 +485,7 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             modifier = Modifier.fillMaxWidth()
                         ) { Text(stringResource(R.string.reader_notebook_open)) }
                     }
-                    if (uiState.isEpub) {
+                    if (uiState.isEpub || (uiState.isPdf && uiState.tableOfContents.isNotEmpty())) {
                         item {
                             OutlinedButton(
                                 onClick = {
@@ -494,7 +494,8 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                 },
                                 modifier = Modifier.fillMaxWidth()
                             ) {
-                                Text("Contents · ${uiState.currentChapterTitle ?: "Browse chapters"}")
+                                Text(if (uiState.isPdf) "PDF outline · ${uiState.tableOfContents.size} entries"
+                                     else "Contents · ${uiState.currentChapterTitle ?: "Browse chapters"}")
                             }
                         }
                     }
@@ -589,9 +590,9 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
         }
         if (showContents) {
             val entries = uiState.tableOfContents.takeIf { it.isNotEmpty() }
-                ?: (0 until uiState.epubChunkCount).map {
+                ?: if (uiState.isEpub) (0 until uiState.epubChunkCount).map {
                     EpubChapter("Section ${it + 1}", it, -1)
-                }
+                } else emptyList()
             AlertDialog(
                 onDismissRequest = { showContents = false },
                 title = { Text("Table of contents") },
@@ -601,7 +602,8 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                             val chapter = entries[i]
                             TextButton(
                                 onClick = {
-                                    if (chapter.spineIndex >= 0)
+                                    if (uiState.isPdf) viewModel.onPdfPageChanged(chapter.chunkIndex)
+                                    else if (chapter.spineIndex >= 0)
                                         viewModel.goToEpubChapter(chapter.spineIndex)
                                     else viewModel.goToEpubChunk(chapter.chunkIndex)
                                     showContents = false
@@ -612,11 +614,13 @@ fun ReaderScreen(viewModel: ReaderViewModel = hiltViewModel()) {
                                     text = chapter.title,
                                     modifier = Modifier.weight(1f),
                                     textAlign = TextAlign.Start,
-                                    color = if (chapter.chunkIndex == uiState.currentChunkIndex)
+                                    color = if (chapter.chunkIndex ==
+                                        (if (uiState.isPdf) uiState.currentPdfPage else uiState.currentChunkIndex))
                                         MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.onSurface
                                 )
-                                Text("${chapter.chunkIndex + 1}")
+                                Text(if (uiState.isPdf) "p. ${chapter.chunkIndex + 1}"
+                                     else "${chapter.chunkIndex + 1}")
                             }
                         }
                     }

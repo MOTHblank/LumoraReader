@@ -91,6 +91,7 @@ class ReaderViewModel @Inject constructor(
     private var epubNavigationGeneration = 0L
     private var epubChunkJob: Job? = null
     private var bookOpenJob: Job? = null
+    private var pdfOutlineJob: Job? = null
     @Volatile private var currentScrollOffset = 0
     @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
     private var selectedEpubAnchor: EpubReadingAnchor? = null
@@ -319,6 +320,7 @@ class ReaderViewModel @Inject constructor(
         onReaderBackground()
         // Invalidate requests before replacing the reader, even if opening suspends.
         bookOpenJob?.cancel()
+        pdfOutlineJob?.cancel()
         readerGeneration++
         positionSaveJob?.cancel()
         currentEpubAnchor = null
@@ -443,6 +445,26 @@ class ReaderViewModel @Inject constructor(
                     if (pageCount > 0) {
                         loadPdfPage(initialPage)
                         loadPdfPage(initialPage + 1)
+                        val openedPdf = bookReader as? PdfBookReader
+                        val openingGeneration = readerGeneration
+                        if (openedPdf != null) {
+                            pdfOutlineJob = viewModelScope.launch {
+                                try {
+                                    val entries = openedPdf.loadOutline()
+                                        .filter { it.first.isNotBlank() && it.second in 0 until pageCount }
+                                        .map { (title, page) -> EpubChapter(title, page, -1) }
+                                    if (readerGeneration == openingGeneration &&
+                                        bookReader === openedPdf && uiState.value.isPdf
+                                    ) {
+                                        _uiState.update { it.copy(tableOfContents = entries) }
+                                    }
+                                } catch (cancelled: CancellationException) {
+                                    throw cancelled
+                                } catch (error: Exception) {
+                                    Timber.w(error, "PDF outline lookup failed")
+                                }
+                            }
+                        }
                     }
                 }
             } catch (error: Exception) {
@@ -1079,6 +1101,7 @@ class ReaderViewModel @Inject constructor(
         quoteObserveJob?.cancel()
         activityObserveJob?.cancel()
         bookOpenJob?.cancel()
+        pdfOutlineJob?.cancel()
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()

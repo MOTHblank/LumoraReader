@@ -111,6 +111,9 @@ android {
         implementation("androidx.activity:activity-ktx:1.10.1")
         implementation("androidx.fragment:fragment-ktx:1.8.8")
 
+        // PDFBox parses PDF outlines; Android's PdfRenderer still handles all rendering.
+        implementation("com.tom-roush:pdfbox-android:2.0.27.0")
+
         // Timber for logging
         implementation(libs.timber)
 

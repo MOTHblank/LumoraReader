@@ -13,6 +13,7 @@ import com.mothblank.lumorareader.domain.model.Page
 import com.mothblank.lumorareader.domain.usecase.BookReader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import timber.log.Timber
 import java.io.IOException
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -26,12 +27,13 @@ import kotlin.math.sqrt
  */
 class PdfBookReader(
     private val context: Context,
-    bookUri: String
+    private val bookUri: String
 ) : BookReader {
     private val renderLock = Any()
     private val pfd: ParcelFileDescriptor
     private val renderer: PdfRenderer
     private var closed = false
+    @Volatile private var outline: List<Pair<String, Int>> = emptyList()
 
     init {
         var openedDescriptor: ParcelFileDescriptor? = null
@@ -125,7 +127,22 @@ class PdfBookReader(
         }
     }
 
-    override fun getTableOfContents(): List<Pair<String, Int>> = emptyList()
+    override fun getTableOfContents(): List<Pair<String, Int>> = outline
+
+    /** Loads navigation metadata off the UI thread, independently of the native renderer. */
+    suspend fun loadOutline(): List<Pair<String, Int>> = withContext(Dispatchers.IO) {
+        if (synchronized(renderLock) { closed }) return@withContext emptyList()
+        val extracted = try {
+            PdfOutlineExtractor.extract(context, bookUri, getPageCount())
+        } catch (error: Exception) {
+            Timber.w(error, "Could not read PDF outline; page navigation remains available")
+            emptyList()
+        }
+        synchronized(renderLock) {
+            if (!closed) outline = extracted
+            if (closed) emptyList() else outline
+        }
+    }
 
     override fun close() {
         synchronized(renderLock) {
