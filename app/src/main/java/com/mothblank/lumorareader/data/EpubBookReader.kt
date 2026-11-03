@@ -421,6 +421,7 @@ class EpubBookReader(
                 pre, code { white-space: pre-wrap; overflow-wrap: anywhere; }
                 .chapter-break { border: none; border-top: 1px solid $textHex; opacity: 0.35; margin: 2.8em 0; }
                 ::highlight(lumora-return-passage) { background: rgba(250, 184, 57, 0.45); }
+                ::highlight(lumora-search-passage) { background: rgba(250, 184, 57, 0.5); }
                 img { max-width: 100%; height: auto; display: block; margin: 1em 0; }
                 a { color: $textHex; text-decoration: underline; }
                 /* Override any existing colors to match theme */
