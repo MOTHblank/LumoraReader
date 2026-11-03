@@ -867,6 +867,19 @@ class ReaderViewModel @Inject constructor(
         }
     }
 
+    /** Ignore layout-driven page observations while a deep-linked result is only a preview. */
+    fun onPdfPageObserved(index: Int) {
+        if (!searchPreview) onPdfPageChanged(index)
+    }
+
+    /** Only a real user scroll or an explicit page command commits a PDF search location. */
+    fun onPdfReaderInteraction() {
+        if (searchPreview && uiState.value.isPdf) {
+            finishSearchPreview()
+            schedulePositionSave(uiState.value.currentPdfPage, 0, uiState.value.pdfPageCount)
+        }
+    }
+
     fun onPdfPageChanged(index: Int) {
         if (index !in 0 until uiState.value.pdfPageCount) return
         if (!uiState.value.isTextSelectionActive) {

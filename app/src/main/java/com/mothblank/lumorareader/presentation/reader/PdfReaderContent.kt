@@ -100,6 +100,10 @@ import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.ColorMatrix
 import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.foundation.gestures.calculateCentroid
 import androidx.compose.foundation.gestures.calculatePan
@@ -272,6 +276,16 @@ fun PdfPageNavigationBar(
 fun PdfScrollReader(viewModel: ReaderViewModel) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val listState = rememberLazyListState(initialFirstVisibleItemIndex = uiState.currentPdfPage)
+    val userScrollConnection = remember(viewModel) {
+        object : NestedScrollConnection {
+            override fun onPreScroll(available: Offset, source: NestedScrollSource): Offset {
+                if (source == NestedScrollSource.UserInput && available.y != 0f) {
+                    viewModel.onPdfReaderInteraction()
+                }
+                return Offset.Zero
+            }
+        }
+    }
 
     val currentVisiblePage by remember {
         derivedStateOf {
@@ -291,7 +305,7 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
     LaunchedEffect(currentVisiblePage, programmaticScroll) {
         if (!programmaticScroll) {
             if (currentVisiblePage != uiState.currentPdfPage) {
-                viewModel.onPdfPageChanged(currentVisiblePage)
+                viewModel.onPdfPageObserved(currentVisiblePage)
             }
             for (page in (currentVisiblePage - 1)..(currentVisiblePage + 2)) {
                 viewModel.loadPdfPage(page)
@@ -326,10 +340,11 @@ fun PdfScrollReader(viewModel: ReaderViewModel) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                 .background(
+                .background(
                     if (uiState.pdfNightMode) Color(0xFF161616)
                     else MaterialTheme.colorScheme.surfaceVariant
-                ),
+                )
+                .nestedScroll(userScrollConnection),
             state = listState,
             // One-finger page scrolling stays enabled when not zoomed.
             userScrollEnabled = uiState.pdfPageZoomScale <= 1.01f,
