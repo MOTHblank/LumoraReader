@@ -174,6 +174,10 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                     }
                                 }
                                 @JavascriptInterface
+                                fun onReaderInteraction() {
+                                    activeView.post { viewModel.onEpubReaderInteraction(fileUri) }
+                                }
+                                @JavascriptInterface
                                 fun onContentLoaded() = Unit
                                 @JavascriptInterface
                                 fun onTap() {
@@ -226,6 +230,13 @@ fun EpubScrollReader(viewModel: ReaderViewModel) {
                                                     JSONObject.quote(passage) + ");",
                                                 null
                                             )
+                                        }
+                                        val searchWord = viewModel.uiState.value.searchHighlightText
+                                        if (!searchWord.isNullOrBlank() && anchor != null && anchor.spineIndex >= 0) {
+                                            val reveal = "setTimeout(function(){window.lumoraRevealSearch?.(" +
+                                                anchor.spineIndex + "," + anchor.characterOffset + "," +
+                                                JSONObject.quote(searchWord) + ");},700);"
+                                            v.evaluateJavascript(reveal, null)
                                         }
                                     }
                                 }
@@ -366,6 +377,93 @@ private fun generateJsBundle(): String = """
             });
         };
         window.addEventListener('scroll', saveScroll, { passive: true });
+        // Programmatic restore is not an indication that the reader continued reading.
+        let resumedByUser = false;
+        const markUserMovement = () => {
+            if (resumedByUser) return;
+            resumedByUser = true;
+            window.AndroidInterface?.onReaderInteraction?.();
+        };
+        window.addEventListener('touchmove', markUserMovement, { passive: true });
+        window.addEventListener('wheel', markUserMovement, { passive: true });
+        window.addEventListener('keydown', event => {
+            if (['ArrowDown', 'ArrowUp', 'PageDown', 'PageUp', ' ', 'Home', 'End'].includes(event.key)) {
+                markUserMovement();
+            }
+        });
+
+        // Source FTS hits supply a UTF-16 offset and the matched token.
+        // Reconcile parser/WebView whitespace differences by choosing the closest
+        // real DOM occurrence instead of scrolling to the start of the chapter.
+        window.lumoraRevealSearch = (spine, expectedOffset, token) => {
+            if (!token || token.length > 80) return;
+            const section = document.querySelector('[data-lumora-spine="' + spine + '"]');
+            if (!section) return;
+            const walker = document.createTreeWalker(section, NodeFilter.SHOW_TEXT);
+            const nodes = [];
+            let full = '', node;
+            while ((node = walker.nextNode()) && full.length < 500000) {
+                nodes.push(node);
+                full += node.textContent;
+            }
+            const needle = token.toLocaleLowerCase();
+            const searchable = full.toLocaleLowerCase();
+            let match = -1, distance = Infinity, from = 0, matches = 0;
+            while (matches++ < 5000) {
+                const at = searchable.indexOf(needle, from);
+                if (at < 0) break;
+                const delta = Math.abs(at - Math.max(0, expectedOffset));
+                if (delta < distance) { match = at; distance = delta; }
+                if (!distance) break;
+                from = at + Math.max(1, needle.length);
+            }
+            if (match < 0) return;
+            let startNode, endNode, begin, end, consumed = 0;
+            const endIndex = match + token.length;
+            for (const entry of nodes) {
+                const count = entry.textContent.length;
+                if (!startNode && match >= consumed && match < consumed + count) {
+                    startNode = entry;
+                    begin = match - consumed;
+                }
+                if (startNode && endIndex <= consumed + count) {
+                    endNode = entry;
+                    end = endIndex - consumed;
+                    break;
+                }
+                consumed += count;
+            }
+            if (!startNode || !endNode) return;
+            const range = document.createRange();
+            try { range.setStart(startNode, begin); range.setEnd(endNode, end); }
+            catch (_) { return; }
+            const rect = range.getBoundingClientRect();
+            if (rect && Number.isFinite(rect.top)) {
+                window.scrollTo(0, Math.max(0, window.scrollY + rect.top -
+                    Math.min(180, window.innerHeight * 0.28)));
+            }
+            if (window.CSS?.highlights && window.Highlight) {
+                CSS.highlights.set('lumora-search-passage', new Highlight(range));
+                setTimeout(() => CSS.highlights.delete('lumora-search-passage'), 7000);
+            } else {
+                requestAnimationFrame(() => {
+                    const overlay = document.createElement('div');
+                    overlay.style.cssText = 'position:absolute;pointer-events:none;z-index:2147483646;';
+                    Array.from(range.getClientRects()).slice(0, 40).forEach(rect => {
+                        if (rect.width < 1 || rect.height < 1) return;
+                        const bar = document.createElement('div');
+                        bar.style.cssText = 'position:absolute;background:rgba(250,184,57,.45);border-radius:3px;';
+                        bar.style.left = (rect.left + window.scrollX) + 'px';
+                        bar.style.top = (rect.top + window.scrollY) + 'px';
+                        bar.style.width = rect.width + 'px';
+                        bar.style.height = rect.height + 'px';
+                        overlay.appendChild(bar);
+                    });
+                    document.body.appendChild(overlay);
+                    setTimeout(() => overlay.remove(), 7000);
+                });
+            }
+        };
 
         // Highlight the single passage reached from the quotation library.
         // DOM Range avoids rewriting book markup, links, and selection handlers.
