@@ -29,7 +29,8 @@ import javax.inject.Singleton
 class RecentBooksRepository @Inject constructor(
     @ApplicationContext context: Context,
     private val dao: RecentBookDao,
-    private val epubSearchDao: EpubSearchDao
+    private val epubSearchDao: EpubSearchDao,
+    private val pdfSearchDao: com.mothblank.lumorareader.data.db.dao.PdfSearchDao
 ) {
     private val prefs: SharedPreferences =
         context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -135,6 +136,8 @@ class RecentBooksRepository @Inject constructor(
         dao.deleteByUri(uri)
         epubSearchDao.deleteForBook(uri)
         epubSearchDao.deleteStatus(uri)
+        pdfSearchDao.deleteForBook(uri)
+        pdfSearchDao.deleteStatus(uri)
     }
 
     suspend fun clearRecentBooks() {
@@ -142,6 +145,8 @@ class RecentBooksRepository @Inject constructor(
         dao.deleteAll()
         epubSearchDao.deleteAllEntries()
         epubSearchDao.deleteAllStatuses()
+        pdfSearchDao.deleteAllEntries()
+        pdfSearchDao.deleteAllStatuses()
     }
 
     private fun RecentBook.toEntity() = RecentBookEntity(

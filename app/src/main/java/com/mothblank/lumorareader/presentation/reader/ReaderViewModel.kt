@@ -13,6 +13,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.BuildConfig
 import com.mothblank.lumorareader.data.EpubSearchRepository
+import com.mothblank.lumorareader.data.PdfSearchRepository
 import com.mothblank.lumorareader.data.EpubBookReader
 import com.mothblank.lumorareader.data.EpubChapter
 import com.mothblank.lumorareader.data.PdfBookReader
@@ -60,6 +61,7 @@ class ReaderViewModel @Inject constructor(
     private val quoteRepository: QuoteRepository,
     private val recentBooksRepository: RecentBooksRepository,
     private val epubSearchRepository: EpubSearchRepository,
+    private val pdfSearchRepository: PdfSearchRepository,
     private val bookmarksRepository: ReadingBookmarksRepository,
     private val readingActivityRepository: ReadingActivityRepository,
     @ApplicationContext private val context: Context
@@ -95,6 +97,7 @@ class ReaderViewModel @Inject constructor(
     private var bookOpenJob: Job? = null
     private var pdfOutlineJob: Job? = null
     private var epubIndexJob: Job? = null
+    private var pdfIndexJob: Job? = null
     @Volatile private var currentScrollOffset = 0
     @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
     private var selectedEpubAnchor: EpubReadingAnchor? = null
@@ -325,6 +328,7 @@ class ReaderViewModel @Inject constructor(
         bookOpenJob?.cancel()
         pdfOutlineJob?.cancel()
         epubIndexJob?.cancel()
+        pdfIndexJob?.cancel()
         readerGeneration++
         positionSaveJob?.cancel()
         currentEpubAnchor = null
@@ -453,7 +457,8 @@ class ReaderViewModel @Inject constructor(
                 } else {
                     val pageCount = bookReader?.getPageCount() ?: 0
                     val initialPage = if (pageCount > 0) {
-                        (requestedQuote?.pageNumber?.minus(1) ?: requestedBookmark?.pdfPageIndex
+                        (savedStateHandle.get<Int>("pdfPageIndex")?.takeIf { it >= 0 }
+                            ?: requestedQuote?.pageNumber?.minus(1) ?: requestedBookmark?.pdfPageIndex
                             ?: saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
                     } else 0
                     _uiState.update {
@@ -465,6 +470,11 @@ class ReaderViewModel @Inject constructor(
                     if (pageCount > 0) {
                         loadPdfPage(initialPage)
                         loadPdfPage(initialPage + 1)
+                        pdfIndexJob = viewModelScope.launch(Dispatchers.IO) {
+                            try { pdfSearchRepository.indexBook(uri) }
+                            catch (cancelled: CancellationException) { throw cancelled }
+                            catch (error: Exception) { Timber.w(error, "PDF search indexing paused") }
+                        }
                         val openedPdf = bookReader as? PdfBookReader
                         val openingGeneration = readerGeneration
                         if (openedPdf != null) {
@@ -1123,6 +1133,7 @@ class ReaderViewModel @Inject constructor(
         bookOpenJob?.cancel()
         pdfOutlineJob?.cancel()
         epubIndexJob?.cancel()
+        pdfIndexJob?.cancel()
         epubChunkJob?.cancel()
         pdfPageJobs.values.forEach { it.cancel() }
         pdfPageJobs.clear()
