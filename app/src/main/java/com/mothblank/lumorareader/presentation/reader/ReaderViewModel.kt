@@ -102,6 +102,8 @@ class ReaderViewModel @Inject constructor(
     @Volatile private var currentEpubAnchor: EpubReadingAnchor? = null
     private var selectedEpubAnchor: EpubReadingAnchor? = null
     private var initialChunkLoaded = false
+    // Discovery links are previews: don't replace a saved location until actual reader input.
+    private var searchPreview = false
     private var positionSaveJob: Job? = null
     private var currentBookUri: String? = null
     private var bookmarkObserveJob: Job? = null
@@ -323,6 +325,7 @@ class ReaderViewModel @Inject constructor(
     }
 
     private fun openBook(uri: String) {
+        searchPreview = false
         onReaderBackground()
         // Invalidate requests before replacing the reader, even if opening suspends.
         bookOpenJob?.cancel()
@@ -378,6 +381,13 @@ class ReaderViewModel @Inject constructor(
                 )
                 val requestedSearchSpine = savedStateHandle.get<Int>("spineIndex")
                     ?.takeIf { it >= 0 }
+                val requestedSearchOffset = savedStateHandle.get<Int>("searchOffset")
+                    ?.takeIf { it >= 0 }
+                val requestedSearchTerm = savedStateHandle.get<String>("searchTerm")
+                    ?.trim()?.take(80)?.takeIf { it.isNotEmpty() }
+                val requestedPdfPage = savedStateHandle.get<Int>("pdfPageIndex")
+                    ?.takeIf { it >= 0 }
+                searchPreview = requestedSearchSpine != null || requestedPdfPage != null
                 val bookDetails = bookRepository.getBookDetails(uri)
                 bookReader?.close()
                 bookReader = withContext(Dispatchers.IO) { bookRepository.openBook(bookDetails) }
@@ -399,7 +409,8 @@ class ReaderViewModel @Inject constructor(
                     it.copy(
                         bookTitle = bookDetails.title,
                         bookAuthor = bookDetails.author,
-                        quoteHighlightText = requestedQuote?.text?.take(2000)
+                        quoteHighlightText = requestedQuote?.text?.take(2000),
+                        searchHighlightText = if (requestedSearchSpine != null) requestedSearchTerm else null
                     )
                 }
                 val epubReader = bookReader as? EpubBookReader
@@ -420,7 +431,7 @@ class ReaderViewModel @Inject constructor(
                         saved?.scrollOffset?.coerceAtLeast(0) ?: 0
                     } else 0
                     currentEpubAnchor = if (searchSpine != null) {
-                        EpubReadingAnchor.create(searchSpine, 0, 0f)
+                        EpubReadingAnchor.create(searchSpine, requestedSearchOffset ?: 0, 0f)
                     } else if (requestedQuote != null || requestedBookmark != null) {
                         requestedEpubAnchor ?: EpubReadingAnchor.create(-1, 0, 0f)
                     } else if (saved?.positionIndex == initialChunk) {
@@ -457,7 +468,7 @@ class ReaderViewModel @Inject constructor(
                 } else {
                     val pageCount = bookReader?.getPageCount() ?: 0
                     val initialPage = if (pageCount > 0) {
-                        (savedStateHandle.get<Int>("pdfPageIndex")?.takeIf { it >= 0 }
+                        (requestedPdfPage
                             ?: requestedQuote?.pageNumber?.minus(1) ?: requestedBookmark?.pdfPageIndex
                             ?: saved?.positionIndex ?: 0).coerceIn(0, pageCount - 1)
                     } else 0
@@ -564,7 +575,7 @@ class ReaderViewModel @Inject constructor(
                 if (initialChunkLoaded && chunkIndex != uiState.value.currentChunkIndex) {
                     positionSaveJob?.cancel()
                     val uri = currentBookUri
-                    if (uri != null) {
+                    if (uri != null && !searchPreview) {
                         try {
                             recentBooksRepository.updateReadingPosition(
                                 uri, uiState.value.currentChunkIndex, currentScrollOffset,
@@ -598,10 +609,13 @@ class ReaderViewModel @Inject constructor(
                         quoteHighlightText = if (quoteToHighlight != null) quoteToHighlight
                             else if (targetAnchor != null ||
                                 chunkIndex != currentState.currentChunkIndex
-                            ) null else it.quoteHighlightText
+                            ) null else it.quoteHighlightText,
+                        searchHighlightText = if (targetAnchor != null ||
+                            chunkIndex != currentState.currentChunkIndex
+                        ) null else it.searchHighlightText
                     )
                 }
-                schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
+                if (!searchPreview) schedulePositionSave(chunkIndex, currentScrollOffset, epubReader.getChunkCount())
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -672,13 +686,17 @@ class ReaderViewModel @Inject constructor(
         val anchor = EpubReadingAnchor.create(spineIndex, 0, 0f) ?: return
         // Even a chapter in the same chunk must produce a fresh WebView so its
         // restore script targets the chosen heading rather than the old scroll.
+        finishSearchPreview()
         loadEpubChunk(chunk, targetAnchor = anchor, forceFreshHtml = true)
     }
 
     fun goToEpubChunk(index: Int) {
         val state = uiState.value
         if (!state.isEpub || state.isTextSelectionActive || index !in 0 until state.epubChunkCount) return
-        if (index != state.currentChunkIndex) loadEpubChunk(index)
+        if (index != state.currentChunkIndex) {
+            finishSearchPreview()
+            loadEpubChunk(index)
+        }
     }
 
     fun dismissQuoteHighlight() {
@@ -687,12 +705,14 @@ class ReaderViewModel @Inject constructor(
 
     fun nextEpubChunk() {
         if (!uiState.value.isTextSelectionActive) {
+            finishSearchPreview()
             loadEpubChunk(uiState.value.currentChunkIndex + 1)
         }
     }
 
     fun previousEpubChunk() {
         if (!uiState.value.isTextSelectionActive) {
+            finishSearchPreview()
             loadEpubChunk(uiState.value.currentChunkIndex - 1)
         }
     }
@@ -850,6 +870,7 @@ class ReaderViewModel @Inject constructor(
     fun onPdfPageChanged(index: Int) {
         if (index !in 0 until uiState.value.pdfPageCount) return
         if (!uiState.value.isTextSelectionActive) {
+            finishSearchPreview()
             if (index != uiState.value.currentPdfPage) {
                 resetPdfPageZoom()
             }
@@ -1097,7 +1118,20 @@ class ReaderViewModel @Inject constructor(
                 currentSpineIndex = anchor.spineIndex
             )
         }
-        schedulePositionSave(state.currentChunkIndex, pixelOffset, state.epubChunkCount)
+        if (!searchPreview) schedulePositionSave(state.currentChunkIndex, pixelOffset, state.epubChunkCount)
+    }
+
+    /** Called only for genuine WebView user movement, never for restore/scroll-to scripts. */
+    fun onEpubReaderInteraction(sourceFileUri: String) {
+        val state = uiState.value
+        if (state.epubFileUri != sourceFileUri || !state.isEpub ||
+            state.isTextSelectionActive || !searchPreview) return
+        finishSearchPreview()
+        schedulePositionSave(state.currentChunkIndex, currentScrollOffset, state.epubChunkCount)
+    }
+
+    private fun finishSearchPreview() {
+        searchPreview = false
     }
 
     fun getEpubAnchor(): EpubReadingAnchor? = currentEpubAnchor
