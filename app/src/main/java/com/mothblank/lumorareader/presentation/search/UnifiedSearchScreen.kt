@@ -129,7 +129,7 @@ fun UnifiedSearchScreen(
                     SearchSectionHeader(stringResource(R.string.discovery_content_hits, results.contentHits.size))
                 }
                 items(results.contentHits,
-                    key = { "content_${it.bookUri}_${it.spineIndex}" }) { hit ->
+                    key = { "content_${it.rowId}" }) { hit ->
                     SearchResultCard(
                         headline = hit.sectionTitle,
                         detail = "${hit.bookTitle} · ${hit.snippet}",
@@ -137,7 +137,9 @@ fun UnifiedSearchScreen(
                         enabled = true,
                         onClick = {
                             navController.navigate(
-                                "reader/${Uri.encode(hit.bookUri)}?spineIndex=${hit.spineIndex}"
+                                "reader/" + Uri.encode(hit.bookUri) + "?spineIndex=" + hit.spineIndex +
+                                    "&searchOffset=" + hit.characterOffset +
+                                    "&searchTerm=" + Uri.encode(hit.matchedText)
                             )
                         }
                     )

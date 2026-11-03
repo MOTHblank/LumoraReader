@@ -26,6 +26,7 @@ data class ReaderUiState(
     val tableOfContents: List<EpubChapter> = emptyList(),
     val currentSpineIndex: Int = -1,
     val quoteHighlightText: String? = null,
+    val searchHighlightText: String? = null,
     val bookmarks: List<ReadingBookmark> = emptyList(),
     val bookQuotes: List<Quote> = emptyList(),
     val bookForegroundMillis: Long = 0L,

@@ -101,13 +101,15 @@ class MainActivity : AppCompatActivity() {
                         composable("books") { BooksScreen(navController) }
                         composable("search") { UnifiedSearchScreen(navController) }
                         composable(
-                            route = "reader/{bookUri}?quoteId={quoteId}&bookmarkId={bookmarkId}&spineIndex={spineIndex}&pdfPageIndex={pdfPageIndex}",
+                            route = "reader/{bookUri}?quoteId={quoteId}&bookmarkId={bookmarkId}&spineIndex={spineIndex}&pdfPageIndex={pdfPageIndex}&searchOffset={searchOffset}&searchTerm={searchTerm}",
                             arguments = listOf(
                                 navArgument("bookUri") { type = NavType.StringType },
                                 navArgument("quoteId") { type = NavType.IntType; defaultValue = -1 },
                                 navArgument("bookmarkId") { type = NavType.LongType; defaultValue = -1L },
                                 navArgument("spineIndex") { type = NavType.IntType; defaultValue = -1 },
-                                navArgument("pdfPageIndex") { type = NavType.IntType; defaultValue = -1 }
+                                navArgument("pdfPageIndex") { type = NavType.IntType; defaultValue = -1 },
+                                navArgument("searchOffset") { type = NavType.IntType; defaultValue = -1 },
+                                navArgument("searchTerm") { type = NavType.StringType; defaultValue = "" }
                             )
                         ) {
                             ReaderScreen()
