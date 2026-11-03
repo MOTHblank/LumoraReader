@@ -176,4 +176,6 @@
     <string name="unsupported_file_type">Tipo de arquivo não suportado para URI: %1$s (nome resolvido: %2$s)</string>
     <string name="book_file_unavailable">Arquivo indisponível — toque para tentar novamente</string>
     <string name="book_reading_progress">%1$d%% lido</string>
+    <string name="discovery_pdf_hits">Resultados em PDF (%1$d)</string>
+    <string name="discovery_pdf_page">Página %1$d</string>
 </resources>

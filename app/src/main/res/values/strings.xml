@@ -188,4 +188,6 @@
     <string name="search_quotes_placeholder">Type text or author to search…</string>
     <string name="book_file_unavailable">File unavailable — tap to retry</string>
     <string name="book_reading_progress">%1$d%% read</string>
+    <string name="discovery_pdf_hits">PDF matches (%1$d)</string>
+    <string name="discovery_pdf_page">Page %1$d</string>
 </resources>

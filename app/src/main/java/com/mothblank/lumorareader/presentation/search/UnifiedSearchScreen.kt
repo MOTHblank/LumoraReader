@@ -143,6 +143,20 @@ fun UnifiedSearchScreen(
                     )
                 }
             }
+            if (results.pdfHits.isNotEmpty()) {
+                item { SearchSectionHeader(stringResource(R.string.discovery_pdf_hits, results.pdfHits.size)) }
+                items(results.pdfHits, key = { "pdf_" + it.bookUri + "_" + it.pageIndex }) { hit ->
+                    SearchResultCard(
+                        headline = hit.bookTitle,
+                        detail = stringResource(R.string.discovery_pdf_page, hit.pageIndex + 1) + " · " + hit.snippet,
+                        icon = { Icon(Icons.Default.Book, contentDescription = null) },
+                        enabled = true,
+                        onClick = {
+                            navController.navigate("reader/" + Uri.encode(hit.bookUri) + "?pdfPageIndex=" + hit.pageIndex)
+                        }
+                    )
+                }
+            }
             if (results.bookmarks.isNotEmpty()) {
                 item {
                     SearchSectionHeader(

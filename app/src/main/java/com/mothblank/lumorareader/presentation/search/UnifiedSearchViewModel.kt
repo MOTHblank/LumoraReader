@@ -3,6 +3,8 @@ package com.mothblank.lumorareader.presentation.search
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.data.EpubSearchRepository
+import com.mothblank.lumorareader.data.PdfSearchRepository
+import com.mothblank.lumorareader.data.db.dao.PdfSearchHit
 import com.mothblank.lumorareader.data.db.dao.EpubSearchHit
 import com.mothblank.lumorareader.data.ReadingActivityRepository
 import com.mothblank.lumorareader.data.ReadingBookmarksRepository
@@ -23,9 +25,10 @@ data class UnifiedSearchResults(
     val quotes: List<Quote> = emptyList(),
     val bookmarks: List<ReadingBookmark> = emptyList(),
     val contentHits: List<EpubSearchHit> = emptyList(),
+    val pdfHits: List<PdfSearchHit> = emptyList(),
     val activity: ReadingActivityTotals = ReadingActivityTotals(0L, 0L, 0, 0)
 ) {
-    val isEmpty: Boolean get() = books.isEmpty() && quotes.isEmpty() && bookmarks.isEmpty() && contentHits.isEmpty()
+    val isEmpty: Boolean get() = books.isEmpty() && quotes.isEmpty() && bookmarks.isEmpty() && contentHits.isEmpty() && pdfHits.isEmpty()
 }
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
@@ -35,6 +38,7 @@ class UnifiedSearchViewModel @Inject constructor(
     private val quotesRepository: QuoteRepository,
     private val bookmarksRepository: ReadingBookmarksRepository,
     private val epubSearchRepository: EpubSearchRepository,
+    private val pdfSearchRepository: PdfSearchRepository,
     activityRepository: ReadingActivityRepository
 ) : ViewModel() {
     private val _query = MutableStateFlow("")
@@ -73,14 +77,18 @@ class UnifiedSearchViewModel @Inject constructor(
         .map { it.trim() }
         .debounce(200L)
         .distinctUntilChanged()
-        .flatMapLatest { epubSearchRepository.search(it) }
+        .flatMapLatest { term ->
+            combine(epubSearchRepository.search(term), pdfSearchRepository.search(term)) { epub, pdf ->
+                epub to pdf
+            }
+        }
 
     val results: StateFlow<UnifiedSearchResults> = combine(
         matches,
         contentMatches,
         activityRepository.observeTotals(since)
     ) { (books, quotes, bookmarks), hits, totals ->
-        UnifiedSearchResults(books, quotes, bookmarks, hits, totals)
+        UnifiedSearchResults(books, quotes, bookmarks, hits.first, hits.second, totals)
     }.stateIn(
         viewModelScope,
         SharingStarted.WhileSubscribed(5_000L),
