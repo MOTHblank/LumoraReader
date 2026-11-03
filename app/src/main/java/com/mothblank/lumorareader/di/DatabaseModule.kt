@@ -5,6 +5,7 @@ import androidx.room.Room
 import com.mothblank.lumorareader.data.db.AppDatabase
 import com.mothblank.lumorareader.data.db.dao.QuoteDao
 import com.mothblank.lumorareader.data.db.dao.EpubSearchDao
+import com.mothblank.lumorareader.data.db.dao.PdfSearchDao
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
 import com.mothblank.lumorareader.data.db.dao.ReadingBookmarkDao
 import com.mothblank.lumorareader.data.db.dao.ReadingSessionDao
@@ -18,6 +19,7 @@ import com.mothblank.lumorareader.data.db.migration.MIGRATION_6_7
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_7_8
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_8_9
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_9_10
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_10_11
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -37,7 +39,7 @@ object DatabaseModule {
             AppDatabase::class.java,
             "lumora-db"
         )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
             .build()
     }
 
@@ -50,6 +52,9 @@ object DatabaseModule {
 
     @Provides
     fun provideEpubSearchDao(database: AppDatabase): EpubSearchDao = database.epubSearchDao()
+
+    @Provides
+    fun providePdfSearchDao(database: AppDatabase): PdfSearchDao = database.pdfSearchDao()
 
     @Provides
     fun provideRecentBookDao(database: AppDatabase): RecentBookDao = database.recentBookDao()

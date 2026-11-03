@@ -17,7 +17,11 @@ import com.mothblank.lumorareader.data.db.migration.MIGRATION_6_7
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_7_8
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_8_9
 import com.mothblank.lumorareader.data.db.migration.MIGRATION_9_10
+import com.mothblank.lumorareader.data.db.migration.MIGRATION_10_11
 import com.mothblank.lumorareader.data.db.dao.EpubSearchDao
+import com.mothblank.lumorareader.data.db.dao.PdfSearchDao
+import com.mothblank.lumorareader.data.db.entity.PdfSearchFtsEntity
+import com.mothblank.lumorareader.data.db.entity.PdfIndexStatusEntity
 import com.mothblank.lumorareader.data.db.entity.EpubSearchFtsEntity
 import com.mothblank.lumorareader.data.db.entity.EpubIndexStatusEntity
 import com.mothblank.lumorareader.data.db.dao.RecentBookDao
@@ -37,13 +41,16 @@ import com.mothblank.lumorareader.data.model.StringListConverter
         ReadingSessionEntity::class,
         EpubSearchFtsEntity::class,
         EpubIndexStatusEntity::class,
+        PdfSearchFtsEntity::class,
+        PdfIndexStatusEntity::class,
     ],
-    version = 10,
+    version = 11,
     exportSchema = false
 )
 @TypeConverters(DateTimeConverter::class, StringListConverter::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun epubSearchDao(): EpubSearchDao
+    abstract fun pdfSearchDao(): PdfSearchDao
     abstract fun quoteDao(): QuoteDao
     abstract fun recentBookDao(): RecentBookDao
     abstract fun readingBookmarkDao(): ReadingBookmarkDao
@@ -60,7 +67,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "lumora_database"
                 )
-                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10)
+                .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_1_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11)
                 .build()
                 INSTANCE = instance
                 instance

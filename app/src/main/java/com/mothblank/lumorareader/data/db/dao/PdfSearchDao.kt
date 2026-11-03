@@ -1,0 +1,65 @@
+package com.mothblank.lumorareader.data.db.dao
+
+import androidx.room.Dao
+import androidx.room.Insert
+import androidx.room.OnConflictStrategy
+import androidx.room.Query
+import com.mothblank.lumorareader.data.db.entity.PdfIndexStatusEntity
+import com.mothblank.lumorareader.data.db.entity.PdfSearchFtsEntity
+import kotlinx.coroutines.flow.Flow
+
+data class PdfSearchHit(
+    val bookUri: String,
+    val bookTitle: String,
+    val pageIndex: Int,
+    val snippet: String
+)
+
+@Dao
+interface PdfSearchDao {
+    @Query("""
+        SELECT pdf_search_fts.bookUri AS bookUri,
+               reading_history.title AS bookTitle,
+               pdf_search_fts.pageIndex AS pageIndex,
+               snippet(pdf_search_fts, '[', ']', '…', 2, 12) AS snippet
+        FROM pdf_search_fts
+        JOIN reading_history ON reading_history.uri = pdf_search_fts.bookUri
+        WHERE pdf_search_fts.content MATCH :query AND reading_history.isAvailable = 1
+        ORDER BY reading_history.lastOpened DESC, pdf_search_fts.pageIndex ASC
+        LIMIT 40
+    """)
+    fun search(query: String): Flow<List<PdfSearchHit>>
+
+    @Query("SELECT * FROM pdf_index_status WHERE bookUri = :uri LIMIT 1")
+    suspend fun getStatus(uri: String): PdfIndexStatusEntity?
+
+    @Query("SELECT * FROM pdf_index_status")
+    fun observeStatuses(): Flow<List<PdfIndexStatusEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertStatus(status: PdfIndexStatusEntity)
+
+    @Insert
+    suspend fun insert(entry: PdfSearchFtsEntity)
+
+    @Query("DELETE FROM pdf_search_fts WHERE bookUri = :uri AND pageIndex = :page")
+    suspend fun deletePage(uri: String, page: Int)
+
+    @Query("DELETE FROM pdf_search_fts WHERE bookUri = :uri")
+    suspend fun deleteForBook(uri: String)
+
+    @Query("DELETE FROM pdf_index_status WHERE bookUri = :uri")
+    suspend fun deleteStatus(uri: String)
+
+    @Query("DELETE FROM pdf_search_fts")
+    suspend fun deleteAllEntries()
+
+    @Query("DELETE FROM pdf_index_status")
+    suspend fun deleteAllStatuses()
+
+    @Query("SELECT COALESCE(SUM(indexedChars), 0) FROM pdf_index_status")
+    suspend fun totalIndexedChars(): Long
+
+    @Query("SELECT bookUri FROM pdf_index_status WHERE bookUri != :except ORDER BY updatedAt ASC LIMIT 1")
+    suspend fun oldestOtherBook(except: String): String?
+}

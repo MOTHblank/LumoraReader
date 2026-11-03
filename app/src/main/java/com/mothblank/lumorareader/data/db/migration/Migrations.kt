@@ -156,3 +156,30 @@ val MIGRATION_9_10 = object : Migration(9, 10) {
         """.trimIndent())
     }
 }
+
+/** Derived, on-device PDF text index; all saved reading positions remain intact. */
+val MIGRATION_10_11 = object : Migration(10, 11) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS pdf_search_fts USING FTS4(
+                bookUri TEXT NOT NULL,
+                pageIndex INTEGER NOT NULL,
+                content TEXT NOT NULL,
+                tokenize=unicode61
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS pdf_index_status (
+                bookUri TEXT NOT NULL PRIMARY KEY,
+                fingerprint TEXT NOT NULL,
+                nextPageIndex INTEGER NOT NULL,
+                totalPages INTEGER NOT NULL,
+                indexedChars INTEGER NOT NULL,
+                searchablePages INTEGER NOT NULL,
+                truncatedPages INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                outcome TEXT NOT NULL
+            )
+        """.trimIndent())
+    }
+}
