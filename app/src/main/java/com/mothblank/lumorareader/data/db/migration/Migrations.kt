@@ -183,3 +183,36 @@ val MIGRATION_10_11 = object : Migration(10, 11) {
         """.trimIndent())
     }
 }
+
+/** Reset only derived EPUB search data to adopt per-segment checkpoints. */
+val MIGRATION_11_12 = object : Migration(11, 12) {
+    override fun migrate(db: SupportSQLiteDatabase) {
+        db.execSQL("DROP TABLE IF EXISTS epub_search_fts")
+        db.execSQL("DROP TABLE IF EXISTS epub_index_status")
+        db.execSQL("""
+            CREATE VIRTUAL TABLE IF NOT EXISTS epub_search_fts USING FTS4(
+                bookUri TEXT NOT NULL,
+                spineIndex INTEGER NOT NULL,
+                segmentIndex INTEGER NOT NULL,
+                textOffset INTEGER NOT NULL,
+                title TEXT NOT NULL,
+                content TEXT NOT NULL,
+                tokenize=unicode61
+            )
+        """.trimIndent())
+        db.execSQL("""
+            CREATE TABLE IF NOT EXISTS epub_index_status (
+                bookUri TEXT NOT NULL PRIMARY KEY,
+                fingerprint TEXT NOT NULL,
+                nextSpineIndex INTEGER NOT NULL,
+                nextTextOffset INTEGER NOT NULL,
+                totalSpines INTEGER NOT NULL,
+                indexedChars INTEGER NOT NULL,
+                unreadableSpines INTEGER NOT NULL,
+                updatedAt INTEGER NOT NULL,
+                outcome TEXT NOT NULL,
+                priority INTEGER NOT NULL
+            )
+        """.trimIndent())
+    }
+}
