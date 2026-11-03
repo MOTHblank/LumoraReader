@@ -19,6 +19,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -36,6 +38,7 @@ class PdfSearchRepository @Inject constructor(
     private val dao: PdfSearchDao
 ) {
     private val indexMutex = Mutex()
+    private val activeBook = MutableStateFlow<String?>(null)
 
     fun search(raw: String): Flow<List<PdfSearchHit>> {
         val tokens = Regex("""[\p{L}\p{N}]{2,}""").findAll(raw).take(8).map { it.value }.toList()
@@ -43,10 +46,17 @@ class PdfSearchRepository @Inject constructor(
         return dao.search(tokens.joinToString(" AND ") { "\"" + it + "\"" })
     }
 
-    fun statuses(): Flow<List<PdfIndexStatusEntity>> = dao.observeStatuses()
+    fun statuses(): Flow<List<PdfIndexStatusEntity>> =
+        combine(dao.observeStatuses(), activeBook) { statuses, active ->
+            statuses.map { status ->
+                if (status.outcome == "IN_PROGRESS" && status.bookUri != active)
+                    status.copy(outcome = "INTERRUPTED") else status
+            }
+        }
 
     suspend fun indexBook(uri: String, prioritize: Boolean = false, restart: Boolean = false) = indexMutex.withLock {
         withContext(Dispatchers.IO) {
+            activeBook.value = uri
             var checkpoint: PdfIndexStatusEntity? = null
             try {
                 PDFBoxResourceLoader.init(context.applicationContext)
@@ -123,6 +133,8 @@ class PdfSearchRepository @Inject constructor(
                 Timber.w(error, "PDF text index paused")
                 checkpoint?.let { dao.upsertStatus(it.copy(outcome = "INTERRUPTED",
                     updatedAt = System.currentTimeMillis())) }
+            } finally {
+                activeBook.value = null
             }
         }
     }

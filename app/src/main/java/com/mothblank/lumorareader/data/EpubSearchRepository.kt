@@ -15,6 +15,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
@@ -31,6 +33,7 @@ class EpubSearchRepository @Inject constructor(
     private val dao: EpubSearchDao
 ) {
     private val indexMutex = Mutex()
+    private val activeBook = MutableStateFlow<String?>(null)
 
     fun search(raw: String): Flow<List<EpubSearchHit>> {
         val tokens = Regex("""[\p{L}\p{N}]{2,}""").findAll(raw)
@@ -40,7 +43,13 @@ class EpubSearchRepository @Inject constructor(
             .map { hits -> hits.map { it.toHit() } }
     }
 
-    fun statuses(): Flow<List<EpubIndexStatusEntity>> = dao.observeStatuses()
+    fun statuses(): Flow<List<EpubIndexStatusEntity>> =
+        combine(dao.observeStatuses(), activeBook) { statuses, active ->
+            statuses.map { status ->
+                if (status.outcome == "IN_PROGRESS" && status.bookUri != active)
+                    status.copy(outcome = "INTERRUPTED") else status
+            }
+        }
 
     private fun EpubSearchRawHit.toHit(): EpubSearchHit {
         val numbers = positions.trim().split(Regex("""\s+""")).mapNotNull { it.toIntOrNull() }
@@ -63,6 +72,8 @@ class EpubSearchRepository @Inject constructor(
         prioritize: Boolean = false,
         restart: Boolean = false
     ) = indexMutex.withLock {
+        activeBook.value = uri
+        try {
         val spineCount = reader.getSpineCount()
         val fingerprint = sourceFingerprint(uri, spineCount)
         val previous = dao.getStatus(uri)
@@ -137,6 +148,9 @@ class EpubSearchRepository @Inject constructor(
             dao.upsertStatus(status.copy(outcome = "INTERRUPTED",
                 updatedAt = System.currentTimeMillis()))
             throw failure
+        }
+        } finally {
+            activeBook.value = null
         }
     }
 
