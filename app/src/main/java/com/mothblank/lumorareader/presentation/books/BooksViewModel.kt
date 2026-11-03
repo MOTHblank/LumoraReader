@@ -4,6 +4,20 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.mothblank.lumorareader.data.RecentBooksRepository
+import com.mothblank.lumorareader.data.EpubSearchRepository
+import com.mothblank.lumorareader.data.EpubBookReader
+import com.mothblank.lumorareader.data.PdfSearchRepository
+import com.mothblank.lumorareader.domain.BookType
+import com.mothblank.lumorareader.data.db.entity.EpubIndexStatusEntity
+import com.mothblank.lumorareader.data.db.entity.PdfIndexStatusEntity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.withContext
+import timber.log.Timber
 import com.mothblank.lumorareader.domain.model.RecentBook
 import com.mothblank.lumorareader.domain.model.ReadingStatus
 import com.mothblank.lumorareader.domain.model.Timestamp
@@ -20,7 +34,9 @@ import javax.inject.Inject
 @HiltViewModel
 class BooksViewModel @Inject constructor(
     private val recentBooksRepository: RecentBooksRepository,
-    private val bookRepository: BookRepository
+    private val bookRepository: BookRepository,
+    private val epubSearchRepository: EpubSearchRepository,
+    private val pdfSearchRepository: PdfSearchRepository
 ) : ViewModel() {
 
     // 1️⃣  In-memory cache for metadata
@@ -28,6 +44,47 @@ class BooksViewModel @Inject constructor(
 
     private val _recentBooks = MutableStateFlow<List<RecentBook>>(emptyList())
     val recentBooks: StateFlow<List<RecentBook>> = _recentBooks.asStateFlow()
+
+    val epubIndexStatuses: StateFlow<Map<String, EpubIndexStatusEntity>> =
+        epubSearchRepository.statuses().map { rows -> rows.associateBy { it.bookUri } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    val pdfIndexStatuses: StateFlow<Map<String, PdfIndexStatusEntity>> =
+        pdfSearchRepository.statuses().map { rows -> rows.associateBy { it.bookUri } }
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+
+    private val _indexingBooks = MutableStateFlow<Set<String>>(emptySet())
+    val indexingBooks: StateFlow<Set<String>> = _indexingBooks.asStateFlow()
+
+    /** Continue a partial index with a larger per-book allowance, or rebuild on request. */
+    fun indexBookContent(uri: String, restart: Boolean) {
+        if (uri in _indexingBooks.value) return
+        _indexingBooks.update { it + uri }
+        viewModelScope.launch {
+            try {
+                val details = cachedBookDetails(uri)
+                withContext(Dispatchers.IO) {
+                    when (details.type) {
+                        BookType.PDF -> pdfSearchRepository.indexBook(uri, prioritize = true)
+                        BookType.EPUB -> {
+                            val reader = bookRepository.openBook(details) as EpubBookReader
+                            reader.use {
+                                epubSearchRepository.indexBook(
+                                    uri, reader, prioritize = true, restart = restart
+                                )
+                            }
+                        }
+                    }
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.w(error, "Unable to index library book")
+            } finally {
+                _indexingBooks.update { it - uri }
+            }
+        }
+    }
 
     init {
         fetchRecentBooks()
