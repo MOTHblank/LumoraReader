@@ -65,7 +65,7 @@ class BooksViewModel @Inject constructor(
                 val details = cachedBookDetails(uri)
                 withContext(Dispatchers.IO) {
                     when (details.type) {
-                        BookType.PDF -> pdfSearchRepository.indexBook(uri, prioritize = true)
+                        BookType.PDF -> pdfSearchRepository.indexBook(uri, prioritize = true, restart = restart)
                         BookType.EPUB -> {
                             val reader = bookRepository.openBook(details) as EpubBookReader
                             reader.use {

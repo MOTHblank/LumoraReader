@@ -78,7 +78,11 @@ internal fun LibraryBookCard(
     onOpen: () -> Unit,
     onToggleFavorite: () -> Unit,
     onOrganize: () -> Unit,
-    onRemove: () -> Unit
+    onRemove: () -> Unit,
+    indexDescription: String? = null,
+    indexActionText: String? = null,
+    isIndexing: Boolean = false,
+    onIndex: () -> Unit = {}
 ) {
     Card(
         shape = RoundedCornerShape(20.dp),
@@ -183,6 +187,28 @@ internal fun LibraryBookCard(
                         progress = { progress.coerceIn(0f, 1f) },
                         modifier = Modifier.fillMaxWidth()
                     )
+                }
+            }
+            if (indexDescription != null) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        indexDescription,
+                        modifier = Modifier.weight(1f),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        style = MaterialTheme.typography.labelSmall
+                    )
+                    TextButton(onClick = onIndex, enabled = book.isAvailable && !isIndexing) {
+                        if (isIndexing) {
+                            CircularProgressIndicator(modifier = Modifier.size(15.dp),
+                                strokeWidth = 2.dp)
+                        } else if (indexActionText != null) {
+                            Text(indexActionText)
+                        }
+                    }
                 }
             }
             BoxWithConstraints(modifier = Modifier.fillMaxWidth()) {

@@ -45,7 +45,7 @@ class PdfSearchRepository @Inject constructor(
 
     fun statuses(): Flow<List<PdfIndexStatusEntity>> = dao.observeStatuses()
 
-    suspend fun indexBook(uri: String, prioritize: Boolean = false) = indexMutex.withLock {
+    suspend fun indexBook(uri: String, prioritize: Boolean = false, restart: Boolean = false) = indexMutex.withLock {
         withContext(Dispatchers.IO) {
             var checkpoint: PdfIndexStatusEntity? = null
             try {
@@ -60,7 +60,7 @@ class PdfSearchRepository @Inject constructor(
                         val total = document.numberOfPages
                         val fingerprint = sourceFingerprint(uri, total)
                         val previous = dao.getStatus(uri)
-                        var status = if (previous == null || previous.fingerprint != fingerprint ||
+                        var status = if (restart || previous == null || previous.fingerprint != fingerprint ||
                             (prioritize && previous.truncatedPages > 0)
                         ) {
                             dao.deleteForBook(uri)

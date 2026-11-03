@@ -178,4 +178,15 @@
     <string name="book_reading_progress">%1$d%% lido</string>
     <string name="discovery_pdf_hits">Resultados em PDF (%1$d)</string>
     <string name="discovery_pdf_page">Página %1$d</string>
+    <string name="library_index_sections">Índice de busca: %1$d/%2$d seções</string>
+    <string name="library_index_pages">Índice de busca: %1$d/%2$d páginas</string>
+    <string name="library_index_full">Completo</string>
+    <string name="library_index_partial">Cobertura parcial</string>
+    <string name="library_index_interrupted">Pausado; pode continuar</string>
+    <string name="library_index_in_progress">Indexando</string>
+    <string name="library_index_image_only">Digitalizado; sem texto selecionável</string>
+    <string name="library_index_not_started">Conteúdo ainda não indexado</string>
+    <string name="library_index_continue">Indexar mais</string>
+    <string name="library_index_reindex">Reindexar</string>
+    <string name="library_index_start">Indexar</string>
 </resources>

@@ -40,6 +40,9 @@ fun BooksScreen(
     viewModel: BooksViewModel = hiltViewModel()
 ) {
     val books by viewModel.recentBooks.collectAsState()
+    val epubIndex by viewModel.epubIndexStatuses.collectAsState()
+    val pdfIndex by viewModel.pdfIndexStatuses.collectAsState()
+    val indexingBooks by viewModel.indexingBooks.collectAsState()
     val context = LocalContext.current
     var search by rememberSaveable { mutableStateOf("") }
     var favoritesOnly by rememberSaveable { mutableStateOf(false) }
@@ -308,8 +311,45 @@ fun BooksScreen(
                 }
             } else {
                 items(visible, key = { it.uri }) { book ->
+                    val epub = epubIndex[book.uri]
+                    val pdf = pdfIndex[book.uri]
+                    val indexState = epub?.outcome ?: pdf?.outcome
+                    val indexStateLabel = when (indexState) {
+                        "FULL" -> stringResource(R.string.library_index_full)
+                        "PARTIAL" -> stringResource(R.string.library_index_partial)
+                        "INTERRUPTED" -> stringResource(R.string.library_index_interrupted)
+                        "IN_PROGRESS" -> stringResource(R.string.library_index_in_progress)
+                        "IMAGE_ONLY" -> stringResource(R.string.library_index_image_only)
+                        else -> stringResource(R.string.library_index_not_started)
+                    }
+                    val coverage = when {
+                        epub != null -> stringResource(R.string.library_index_sections,
+                            epub.nextSpineIndex, epub.totalSpines) + " · " + indexStateLabel
+                        pdf != null -> stringResource(R.string.library_index_pages,
+                            pdf.nextPageIndex, pdf.totalPages) + " · " + indexStateLabel
+                        else -> indexStateLabel
+                    }
+                    val canContinue = when {
+                        epub != null -> indexState in setOf("PARTIAL", "INTERRUPTED", "IN_PROGRESS") &&
+                            epub.nextSpineIndex < epub.totalSpines
+                        pdf != null -> indexState in setOf("PARTIAL", "INTERRUPTED", "IN_PROGRESS") &&
+                            pdf.nextPageIndex < pdf.totalPages
+                        else -> false
+                    }
+                    val indexAction = stringResource(
+                        when {
+                            book.uri in indexingBooks -> R.string.library_index_in_progress
+                            canContinue -> R.string.library_index_continue
+                            indexState == null -> R.string.library_index_start
+                            else -> R.string.library_index_reindex
+                        }
+                    )
                     LibraryBookCard(
                         book = book,
+                        indexDescription = coverage,
+                        indexActionText = indexAction,
+                        isIndexing = book.uri in indexingBooks,
+                        onIndex = { viewModel.indexBookContent(book.uri, restart = !canContinue) },
                         onOpen = { navController.navigate("reader/${Uri.encode(book.uri)}") },
                         onToggleFavorite = { viewModel.setFavorite(book, !book.isFavorite) },
                         onOrganize = { editing = book },
