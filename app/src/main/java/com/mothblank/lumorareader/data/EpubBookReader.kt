@@ -24,6 +24,13 @@ import java.util.zip.ZipInputStream
 /** A named navigation target with an original spine position. */
 data class EpubChapter(val title: String, val chunkIndex: Int, val spineIndex: Int)
 
+data class EpubSearchSegment(
+    val text: String,
+    val nextOffset: Int,
+    val hasMore: Boolean,
+    val incomplete: Boolean
+)
+
 class EpubBookReader(
     private val context: Context,
     private val bookUri: String
@@ -128,6 +135,91 @@ class EpubBookReader(
 
     fun getChunkCount(): Int = chunkedSpine.size
     fun getSpineCount(): Int = spine.size
+
+    /**
+     * Read a bounded visible-text segment from a source XHTML spine file.
+     * Character offsets use UTF-16 (the same units as WebView text nodes).
+     * A fresh streaming parser also lets an interrupted index resume mid-chapter.
+     */
+    suspend fun searchTextSegment(spineIndex: Int, startOffset: Int, maxChars: Int): EpubSearchSegment =
+        withContext(Dispatchers.IO) {
+            synchronized(lifecycleLock) {
+                check(!closed) { "EPUB reader already closed" }
+                val path = spine.getOrNull(spineIndex)
+                    ?: return@synchronized EpubSearchSegment("", startOffset, false, true)
+                val file = File(tempDir, path)
+                if (!file.isFile || maxChars <= 0) {
+                    return@synchronized EpubSearchSegment("", startOffset, false, true)
+                }
+                val start = startOffset.coerceAtLeast(0)
+                val limit = maxChars.coerceIn(1, 16_000)
+                try {
+                    val parser = XmlPullParserFactory.newInstance().newPullParser()
+                    val result = StringBuilder(limit + 1)
+                    var inBody = false
+                    var bodyFound = false
+                    var skipDepth = 0
+                    var position = 0
+                    file.inputStream().buffered().use { input ->
+                        parser.setInput(input, "UTF-8")
+                        var event = parser.eventType
+                        while (event != XmlPullParser.END_DOCUMENT && result.length <= limit) {
+                            when (event) {
+                                XmlPullParser.START_TAG -> {
+                                    val tag = parser.name?.lowercase().orEmpty()
+                                    if (tag == "body") {
+                                        inBody = true
+                                        bodyFound = true
+                                    }
+                                    if (inBody && (skipDepth > 0 ||
+                                        tag in setOf("script", "style", "svg", "noscript"))) {
+                                        skipDepth++
+                                    }
+                                }
+                                XmlPullParser.END_TAG -> {
+                                    val tag = parser.name?.lowercase().orEmpty()
+                                    if (inBody && skipDepth > 0) skipDepth--
+                                    if (tag == "body") inBody = false
+                                }
+                                XmlPullParser.TEXT, XmlPullParser.CDSECT -> {
+                                    if (inBody && skipDepth == 0) {
+                                        val part = parser.text.orEmpty()
+                                        val skip = (start - position).coerceAtLeast(0).coerceAtMost(part.length)
+                                        if (skip < part.length) {
+                                            val count = minOf(part.length - skip, limit + 1 - result.length)
+                                            if (count > 0) result.append(part, skip, skip + count)
+                                        }
+                                        position += part.length
+                                    }
+                                }
+                            }
+                            if (result.length > limit) break
+                            event = parser.next()
+                        }
+                    }
+                    if (!bodyFound) throw java.io.IOException("EPUB XHTML has no body")
+                    val text = result.toString().take(limit)
+                    EpubSearchSegment(text, start + text.length, result.length > limit, false)
+                } catch (error: Exception) {
+                    // Broken/HTML-only chapters still get a bounded best-effort excerpt.
+                    // Mark them partial instead of claiming the whole book was indexed.
+                    val markup = StringBuilder(180_000)
+                    file.bufferedReader(Charsets.UTF_8).use { reader ->
+                        val buffer = CharArray(4096)
+                        while (markup.length < 180_000) {
+                            val read = reader.read(buffer, 0, minOf(buffer.size, 180_000 - markup.length))
+                            if (read <= 0) break
+                            markup.append(buffer, 0, read)
+                        }
+                    }
+                    val clean = markup.toString()
+                        .replace(Regex("""(?is)<(script|style|svg)\b[^>]*>.*?</\1\s*>"""), " ")
+                    val text = Html.fromHtml(clean, Html.FROM_HTML_MODE_COMPACT).toString()
+                        .replace(Regex("""\s+"""), " ").trim().drop(start).take(limit)
+                    EpubSearchSegment(text, start + text.length, false, true)
+                }
+            }
+        }
 
     /** Bounded plain text of one stable spine section for offline search. */
     suspend fun textForSearch(spineIndex: Int, maxTextChars: Int): String =
