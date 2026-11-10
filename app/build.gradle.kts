@@ -114,6 +114,9 @@ android {
         // PDFBox parses PDF outlines; Android's PdfRenderer still handles all rendering.
         implementation("com.tom-roush:pdfbox-android:2.0.27.0")
 
+        // Bundled on-device OCR model; works without a Play Services model download.
+        implementation("com.google.mlkit:text-recognition:16.0.1")
+
         // Timber for logging
         implementation(libs.timber)
 
