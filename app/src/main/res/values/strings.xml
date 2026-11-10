@@ -201,4 +201,11 @@
     <string name="library_index_continue">Index more</string>
     <string name="library_index_reindex">Reindex</string>
     <string name="library_index_start">Index</string>
+    <string name="library_index_ocr_start">Run OCR</string>
+    <string name="library_index_ocr_in_progress">OCR indexing</string>
+    <string name="library_index_ocr_interrupted">OCR paused; resumable</string>
+    <string name="library_index_ocr_partial">Partial OCR coverage</string>
+    <string name="library_index_ocr_full">OCR complete</string>
+    <string name="library_index_ocr_empty">OCR complete; no text recognized</string>
+    <string name="discovery_pdf_ocr_source">OCR text</string>
 </resources>
