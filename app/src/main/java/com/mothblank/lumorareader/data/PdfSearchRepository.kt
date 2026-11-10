@@ -28,6 +28,8 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.yield
 import timber.log.Timber
 import java.io.Writer
+import java.security.DigestInputStream
+import java.security.MessageDigest
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -66,9 +68,13 @@ class PdfSearchRepository @Inject constructor(
                 val input = context.contentResolver.openInputStream(Uri.parse(uri))
                     ?: throw java.io.FileNotFoundException("PDF document is inaccessible")
                 input.use { stream ->
-                    PDDocument.load(stream, scratch).use { document ->
+                    val digest = MessageDigest.getInstance("SHA-256")
+                    // PDFBox consumes the input stream while constructing the document.
+                    // Hash those same bytes, avoiding another potentially expensive provider read.
+                    val hashingStream = DigestInputStream(stream, digest)
+                    PDDocument.load(hashingStream, scratch).use { document ->
                         val total = document.numberOfPages
-                        val fingerprint = sourceFingerprint(uri, total)
+                        val fingerprint = sourceFingerprint(uri, total, digest.digest())
                         val previous = dao.getStatus(uri)
                         var status = if (restart || previous == null || previous.fingerprint != fingerprint ||
                             (prioritize && previous.truncatedPages > 0)
@@ -147,7 +153,7 @@ class PdfSearchRepository @Inject constructor(
         }
     }
 
-    private fun sourceFingerprint(uri: String, pageCount: Int): String {
+    private fun sourceFingerprint(uri: String, pageCount: Int, contentHash: ByteArray): String {
         val parsed = Uri.parse(uri)
         fun number(column: String): Long = try {
             context.contentResolver.query(parsed, arrayOf(column), null, null, null)?.use { c ->
@@ -155,8 +161,11 @@ class PdfSearchRepository @Inject constructor(
                 if (c.moveToFirst() && n >= 0 && !c.isNull(n)) c.getLong(n) else -1L
             } ?: -1L
         } catch (_: Exception) { -1L }
-        return number(OpenableColumns.SIZE).toString() + ":" +
-            number(DocumentsContract.Document.COLUMN_LAST_MODIFIED) + ":" + pageCount
+        // Version prefix invalidates older metadata-only index checkpoints once.
+        // Keep provider metadata as a cheap identity signal alongside the content hash.
+        return "sha256-v2:" + number(OpenableColumns.SIZE) + ":" +
+            number(DocumentsContract.Document.COLUMN_LAST_MODIFIED) + ":" + pageCount + ":" +
+            contentHash.joinToString("") { "%02x".format(it.toInt() and 0xff) }
     }
 
     private class LimitedWriter(private val limit: Int) : Writer() {
