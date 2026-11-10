@@ -150,7 +150,15 @@ fun UnifiedSearchScreen(
                 items(results.pdfHits, key = { "pdf_" + it.bookUri + "_" + it.pageIndex }) { hit ->
                     SearchResultCard(
                         headline = hit.bookTitle,
-                        detail = stringResource(R.string.discovery_pdf_page, hit.pageIndex + 1) + " · " + hit.snippet,
+                        detail = buildString {
+                            append(stringResource(R.string.discovery_pdf_page, hit.pageIndex + 1))
+                            if (hit.source == "OCR") {
+                                append(" · ")
+                                append(stringResource(R.string.discovery_pdf_ocr_source))
+                            }
+                            append(" · ")
+                            append(hit.snippet)
+                        },
                         icon = { Icon(Icons.Default.Book, contentDescription = null) },
                         enabled = true,
                         onClick = {
