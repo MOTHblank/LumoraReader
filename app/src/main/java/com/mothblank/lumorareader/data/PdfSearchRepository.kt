@@ -1,6 +1,9 @@
 package com.mothblank.lumorareader.data
 
 import android.content.Context
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.pdf.PdfRenderer
 import android.net.Uri
 import android.provider.DocumentsContract
 import android.provider.OpenableColumns
@@ -8,6 +11,10 @@ import com.mothblank.lumorareader.data.db.dao.PdfSearchDao
 import com.mothblank.lumorareader.data.db.dao.PdfSearchHit
 import com.mothblank.lumorareader.data.db.entity.PdfIndexStatusEntity
 import com.mothblank.lumorareader.data.db.entity.PdfSearchFtsEntity
+import com.google.android.gms.tasks.Tasks
+import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.io.MemoryUsageSetting
 import com.tom_roush.pdfbox.pdmodel.PDDocument
@@ -30,6 +37,7 @@ import timber.log.Timber
 import java.io.Writer
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import kotlin.math.roundToInt
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -85,6 +93,7 @@ class PdfSearchRepository @Inject constructor(
                         } else previous
                         checkpoint = status
                         if (status.outcome == "FULL" || status.outcome == "IMAGE_ONLY" ||
+                            status.outcome.startsWith("OCR_") ||
                             (status.outcome == "PARTIAL" && !prioritize)) return@use
                         val budget = if (prioritize) PRIORITY_BOOK_CHARS else DEFAULT_BOOK_CHARS
                         val maxPages = if (prioritize) PRIORITY_PAGES else DEFAULT_PAGES
@@ -145,6 +154,150 @@ class PdfSearchRepository @Inject constructor(
         }
     }
 
+    /**
+     * Opt-in OCR for PDFs that have no extractable text.
+     *
+     * A normal index pass is performed first so the source fingerprint is revalidated.
+     * OCR checkpoints use OCR_* outcomes, keeping recognized text distinguishable from
+     * directly extracted PDF text without duplicating the FTS storage schema.
+     */
+    suspend fun ocrBook(uri: String, restart: Boolean = false) {
+        indexBook(uri, prioritize = true)
+        indexMutex.withLock {
+            withContext(Dispatchers.IO) {
+                activeBook.value = uri
+                var checkpoint: PdfIndexStatusEntity? = null
+                var recognizer: com.google.mlkit.vision.text.TextRecognizer? = null
+                try {
+                    val previous = dao.getStatus(uri) ?: return@withContext
+                    val isOcr = previous.outcome.startsWith("OCR_")
+                    if (!isOcr && previous.outcome != "IMAGE_ONLY") return@withContext
+                    if (previous.outcome == "OCR_FULL" && !restart) return@withContext
+
+                    var status = if (restart || !isOcr || previous.outcome == "OCR_EMPTY") {
+                        dao.deleteForBook(uri)
+                        previous.copy(
+                            nextPageIndex = 0,
+                            indexedChars = 0,
+                            searchablePages = 0,
+                            truncatedPages = 0,
+                            updatedAt = System.currentTimeMillis(),
+                            outcome = "OCR_IN_PROGRESS"
+                        ).also { dao.upsertStatus(it) }
+                    } else {
+                        previous.copy(
+                            updatedAt = System.currentTimeMillis(),
+                            outcome = "OCR_IN_PROGRESS"
+                        ).also { dao.upsertStatus(it) }
+                    }
+                    checkpoint = status
+
+                    val descriptor = context.contentResolver.openFileDescriptor(Uri.parse(uri), "r")
+                        ?: throw java.io.FileNotFoundException("PDF document is inaccessible")
+                    descriptor.use { fileDescriptor ->
+                        PdfRenderer(fileDescriptor).use { renderer ->
+                            val total = minOf(renderer.pageCount, status.totalPages)
+                            recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
+                            var pageIndex = status.nextPageIndex.coerceAtMost(total)
+                            while (pageIndex < total &&
+                                pageIndex < PRIORITY_PAGES &&
+                                status.indexedChars < PRIORITY_BOOK_CHARS
+                            ) {
+                                currentCoroutineContext().ensureActive()
+                                val remaining = PRIORITY_BOOK_CHARS - status.indexedChars
+                                var text = ""
+                                var truncated = false
+
+                                renderer.openPage(pageIndex).use { page ->
+                                    val scale = minOf(
+                                        OCR_RENDER_WIDTH.toFloat() / page.width.coerceAtLeast(1),
+                                        OCR_RENDER_MAX_HEIGHT.toFloat() / page.height.coerceAtLeast(1)
+                                    )
+                                    val width = (page.width * scale).roundToInt().coerceAtLeast(1)
+                                    val height = (page.height * scale).roundToInt().coerceAtLeast(1)
+                                    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+                                    try {
+                                        bitmap.eraseColor(Color.WHITE)
+                                        page.render(
+                                            bitmap,
+                                            null,
+                                            null,
+                                            PdfRenderer.Page.RENDER_MODE_FOR_DISPLAY
+                                        )
+                                        val recognized = Tasks.await(
+                                            recognizer!!.process(InputImage.fromBitmap(bitmap, 0))
+                                        ).text.trim()
+                                        val limit = minOf(PRIORITY_PAGE_CHARS, remaining)
+                                        text = recognized.take(limit)
+                                        truncated = recognized.length > text.length
+                                    } finally {
+                                        bitmap.recycle()
+                                    }
+                                }
+
+                                dao.deletePage(uri, pageIndex)
+                                if (text.isNotBlank()) {
+                                    dao.insert(PdfSearchFtsEntity(uri, pageIndex, text))
+                                }
+                                status = status.copy(
+                                    nextPageIndex = pageIndex + 1,
+                                    indexedChars = status.indexedChars + text.length,
+                                    searchablePages = status.searchablePages +
+                                        if (text.isNotBlank()) 1 else 0,
+                                    truncatedPages = status.truncatedPages + if (truncated) 1 else 0,
+                                    updatedAt = System.currentTimeMillis(),
+                                    outcome = "OCR_IN_PROGRESS"
+                                )
+                                checkpoint = status
+                                dao.upsertStatus(status)
+                                pageIndex++
+                                if (pageIndex % 8 == 0) prune(uri)
+                                yield()
+                            }
+
+                            status = status.copy(
+                                outcome = when {
+                                    pageIndex < total || status.truncatedPages > 0 -> "OCR_PARTIAL"
+                                    status.searchablePages == 0 -> "OCR_EMPTY"
+                                    else -> "OCR_FULL"
+                                },
+                                updatedAt = System.currentTimeMillis()
+                            )
+                            checkpoint = status
+                            dao.upsertStatus(status)
+                            prune(uri)
+                        }
+                    }
+                } catch (cancelled: CancellationException) {
+                    checkpoint?.let {
+                        withContext(NonCancellable) {
+                            dao.upsertStatus(
+                                it.copy(
+                                    outcome = "OCR_INTERRUPTED",
+                                    updatedAt = System.currentTimeMillis()
+                                )
+                            )
+                        }
+                    }
+                    throw cancelled
+                } catch (error: Exception) {
+                    Timber.w(error, "PDF OCR index paused")
+                    checkpoint?.let {
+                        dao.upsertStatus(
+                            it.copy(
+                                outcome = "OCR_INTERRUPTED",
+                                updatedAt = System.currentTimeMillis()
+                            )
+                        )
+                    }
+                } finally {
+                    recognizer?.close()
+                    activeBook.value = null
+                }
+            }
+        }
+    }
+
     private suspend fun prune(except: String) {
         while (dao.totalIndexedChars() > MAX_GLOBAL_CHARS) {
             val victim = dao.evictionCandidate(except) ?: break
@@ -190,5 +343,7 @@ class PdfSearchRepository @Inject constructor(
         private const val DEFAULT_PAGES = 1500
         private const val PRIORITY_PAGES = 5000
         private const val MAX_GLOBAL_CHARS = 6_000_000L
+        private const val OCR_RENDER_WIDTH = 1600
+        private const val OCR_RENDER_MAX_HEIGHT = 2400
     }
 }
