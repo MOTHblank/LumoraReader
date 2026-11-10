@@ -189,4 +189,11 @@
     <string name="library_index_continue">Indexar mais</string>
     <string name="library_index_reindex">Reindexar</string>
     <string name="library_index_start">Indexar</string>
+    <string name="library_index_ocr_start">Executar OCR</string>
+    <string name="library_index_ocr_in_progress">OCR em andamento</string>
+    <string name="library_index_ocr_interrupted">OCR pausado; pode continuar</string>
+    <string name="library_index_ocr_partial">OCR com cobertura parcial</string>
+    <string name="library_index_ocr_full">OCR concluído</string>
+    <string name="library_index_ocr_empty">OCR concluído; nenhum texto reconhecido</string>
+    <string name="discovery_pdf_ocr_source">Texto por OCR</string>
 </resources>
