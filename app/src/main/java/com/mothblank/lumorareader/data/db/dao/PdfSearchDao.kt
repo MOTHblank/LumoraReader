@@ -60,6 +60,18 @@ interface PdfSearchDao {
     @Query("SELECT COALESCE(SUM(indexedChars), 0) FROM pdf_index_status")
     suspend fun totalIndexedChars(): Long
 
-    @Query("SELECT bookUri FROM pdf_index_status WHERE bookUri != :except ORDER BY updatedAt ASC LIMIT 1")
-    suspend fun oldestOtherBook(except: String): String?
+    @Query("""
+        SELECT status.bookUri
+        FROM pdf_index_status AS status
+        LEFT JOIN reading_history AS history ON history.uri = status.bookUri
+        WHERE status.bookUri != :except
+          AND COALESCE(history.isFavorite, 0) = 0
+        ORDER BY
+            CASE WHEN history.uri IS NULL THEN 0 ELSE 1 END ASC,
+            COALESCE(history.lastOpened, 0) ASC,
+            status.indexedChars ASC,
+            status.updatedAt ASC
+        LIMIT 1
+    """)
+    suspend fun evictionCandidate(except: String): String?
 }
