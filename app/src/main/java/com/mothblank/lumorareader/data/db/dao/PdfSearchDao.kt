@@ -12,7 +12,8 @@ data class PdfSearchHit(
     val bookUri: String,
     val bookTitle: String,
     val pageIndex: Int,
-    val snippet: String
+    val snippet: String,
+    val source: String
 )
 
 @Dao
@@ -21,9 +22,11 @@ interface PdfSearchDao {
         SELECT pdf_search_fts.bookUri AS bookUri,
                reading_history.title AS bookTitle,
                pdf_search_fts.pageIndex AS pageIndex,
-               snippet(pdf_search_fts, '[', ']', '…', 2, 12) AS snippet
+               snippet(pdf_search_fts, '[', ']', '…', 2, 12) AS snippet,
+               CASE WHEN pdf_index_status.outcome LIKE 'OCR_%' THEN 'OCR' ELSE 'TEXT' END AS source
         FROM pdf_search_fts
         JOIN reading_history ON reading_history.uri = pdf_search_fts.bookUri
+        LEFT JOIN pdf_index_status ON pdf_index_status.bookUri = pdf_search_fts.bookUri
         WHERE pdf_search_fts.content MATCH :query AND reading_history.isAvailable = 1
         ORDER BY reading_history.lastOpened DESC, pdf_search_fts.pageIndex ASC
         LIMIT 40
@@ -69,6 +72,7 @@ interface PdfSearchDao {
         ORDER BY
             CASE WHEN history.uri IS NULL THEN 0 ELSE 1 END ASC,
             COALESCE(history.lastOpened, 0) ASC,
+            CASE WHEN status.outcome LIKE 'OCR_%' THEN 1 ELSE 0 END ASC,
             status.indexedChars ASC,
             status.updatedAt ASC
         LIMIT 1
