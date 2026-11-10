@@ -147,7 +147,7 @@ class PdfSearchRepository @Inject constructor(
 
     private suspend fun prune(except: String) {
         while (dao.totalIndexedChars() > MAX_GLOBAL_CHARS) {
-            val victim = dao.oldestOtherBook(except) ?: break
+            val victim = dao.evictionCandidate(except) ?: break
             dao.deleteForBook(victim)
             dao.deleteStatus(victim)
         }
