@@ -86,6 +86,25 @@ class BooksViewModel @Inject constructor(
         }
     }
 
+    /** Run or resume OCR only for PDFs whose normal text extraction found no searchable text. */
+    fun indexPdfWithOcr(uri: String, restart: Boolean = false) {
+        if (uri in _indexingBooks.value) return
+        _indexingBooks.update { it + uri }
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.IO) {
+                    pdfSearchRepository.ocrBook(uri, restart = restart)
+                }
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Timber.w(error, "Unable to OCR-index PDF")
+            } finally {
+                _indexingBooks.update { it - uri }
+            }
+        }
+    }
+
     init {
         fetchRecentBooks()
     }
