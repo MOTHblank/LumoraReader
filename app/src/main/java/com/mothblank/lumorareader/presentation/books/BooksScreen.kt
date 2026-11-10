@@ -320,6 +320,11 @@ fun BooksScreen(
                         "INTERRUPTED" -> stringResource(R.string.library_index_interrupted)
                         "IN_PROGRESS" -> stringResource(R.string.library_index_in_progress)
                         "IMAGE_ONLY" -> stringResource(R.string.library_index_image_only)
+                        "OCR_IN_PROGRESS" -> stringResource(R.string.library_index_ocr_in_progress)
+                        "OCR_INTERRUPTED" -> stringResource(R.string.library_index_ocr_interrupted)
+                        "OCR_PARTIAL" -> stringResource(R.string.library_index_ocr_partial)
+                        "OCR_FULL" -> stringResource(R.string.library_index_ocr_full)
+                        "OCR_EMPTY" -> stringResource(R.string.library_index_ocr_empty)
                         else -> stringResource(R.string.library_index_not_started)
                     }
                     val coverage = when {
@@ -332,13 +337,16 @@ fun BooksScreen(
                     val canContinue = when {
                         epub != null -> indexState in setOf("PARTIAL", "INTERRUPTED", "IN_PROGRESS") &&
                             epub.nextSpineIndex < epub.totalSpines
-                        pdf != null -> indexState in setOf("PARTIAL", "INTERRUPTED", "IN_PROGRESS") &&
-                            pdf.nextPageIndex < pdf.totalPages
+                        pdf != null -> indexState in setOf(
+                            "PARTIAL", "INTERRUPTED", "IN_PROGRESS",
+                            "OCR_PARTIAL", "OCR_INTERRUPTED", "OCR_IN_PROGRESS"
+                        ) && pdf.nextPageIndex < pdf.totalPages
                         else -> false
                     }
                     val indexAction = stringResource(
                         when {
                             book.uri in indexingBooks -> R.string.library_index_in_progress
+                            indexState == "IMAGE_ONLY" -> R.string.library_index_ocr_start
                             canContinue -> R.string.library_index_continue
                             indexState == null -> R.string.library_index_start
                             else -> R.string.library_index_reindex
@@ -349,7 +357,17 @@ fun BooksScreen(
                         indexDescription = coverage,
                         indexActionText = indexAction,
                         isIndexing = book.uri in indexingBooks,
-                        onIndex = { viewModel.indexBookContent(book.uri, restart = !canContinue) },
+                        onIndex = {
+                            val ocrState = indexState == "IMAGE_ONLY" || indexState?.startsWith("OCR_") == true
+                            if (ocrState && pdf != null) {
+                                viewModel.indexPdfWithOcr(
+                                    book.uri,
+                                    restart = indexState?.startsWith("OCR_") == true && !canContinue
+                                )
+                            } else {
+                                viewModel.indexBookContent(book.uri, restart = !canContinue)
+                            }
+                        },
                         onOpen = { navController.navigate("reader/${Uri.encode(book.uri)}") },
                         onToggleFavorite = { viewModel.setFavorite(book, !book.isFavorite) },
                         onOrganize = { editing = book },
